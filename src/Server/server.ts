@@ -4,8 +4,17 @@ import { resolve } from "path";
 import { LevelMaker } from "../serversideLevelMaker.ts";
 import { Vector } from "../../_SqueletoECS/Vector.ts";
 import { gamestates } from "../projecttypes.ts";
+import { System, Box, RaycastHit } from "detect-collisions";
 
 dotenv.config();
+
+enum collisionBodyType {
+  player,
+  wall,
+  cage,
+}
+
+type colliderBody = Box & { cBody: collisionBodyType };
 
 const startingpattern = [
   [0, 0, 0, 0, 0, 0],
@@ -18,6 +27,7 @@ const startingpattern = [
 
 let currentMap: Array<Array<number>> = [];
 type direction = "right" | "up" | "left" | "down" | "none";
+
 type InternalState = {
   map: Array<Array<number>> | undefined;
   startingCoords: [number, number];
@@ -32,7 +42,8 @@ type InternalState = {
  *************************/
 type InternalPlayer = {
   id: UserId;
-  position: Vector;
+  colliderBody: colliderBody;
+
   direction: direction;
   status: "idle" | "walk";
   velocity: Vector;
@@ -66,20 +77,35 @@ const app: Application = {
           mapdata = await generateNewMap();
         } while (!mapdata);
         console.log("starting coords", mapdata.coords);
+        //findEdgeCoordinates and add to collision system
+        const bankOfCoords = findEdgeCoordinates(mapdata.map);
+        addTilesToCollisionSystem(bankOfCoords);
 
         let cages: Vector[] = [];
         cages.push(new Vector(mapdata.coords[0] * 16, mapdata.coords[1] * 16));
+        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, mapdata.coords[1] * 16)));
         cages.push(new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16)));
         cages.push(new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16)));
         cages.push(new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16)));
         cages.push(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16));
+        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16)));
         cages.push(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16)));
         cages.push(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16));
+        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16)));
         cages.push(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16)));
         cages.push(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16));
+        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16)));
         cages.push(new Vector((mapdata.coords[0] + 1) * 16, (mapdata.coords[1] + 3) * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 1) * 16, (mapdata.coords[1] + 3) * 16)));
         cages.push(new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16)));
         cages.push(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 3) * 16));
+        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 3) * 16)));
 
         let newRoomState: InternalState = {
           players: [],
@@ -158,23 +184,33 @@ const app: Application = {
         myColor = "blue";
       }
 
+      const cbody = createPlayerBody(startingVector);
       const newPlayer: InternalPlayer = {
         id: userId,
         direction: "down",
-        position: startingVector,
         velocity: new Vector(0, 0),
         status: "idle",
         color: myColor,
+        colliderBody: cbody,
       };
-
+      dc.insert(cbody);
       game?.players.push(newPlayer);
+
       server.broadcastMessage(
         roomId,
         encoder.encode(
           JSON.stringify({
             type: "USERLIST",
             roomID: roomId,
-            users: game?.players,
+            users: game?.players.map(plr => {
+              return {
+                id: plr.id,
+                direction: plr.direction,
+                status: plr.status,
+                position: plr.colliderBody.pos,
+                color: plr.color,
+              };
+            }),
           })
         )
       );
@@ -270,9 +306,42 @@ const app: Application = {
 const port = 9000;
 const server = await startServer(app, port);
 console.log(`Hathora Server listening on port ${port}`);
+console.log(`Firing up physics system`);
+let dc = new System();
 
 setInterval(() => {
   rooms.forEach((room, key) => {
+    //***************** */
+    //Collision Check/mgmt
+    //***************** */
+
+    dc.checkAll(response => {
+      let { a, b, overlapV } = response;
+      if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.wall) {
+        //player and wall
+        a.x -= overlapV.x;
+        a.y -= overlapV.y;
+
+        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
+        room.players[plrIndex].position.x = a.x;
+        room.players[plrIndex].position.y = a.y; */
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.player) {
+        //player and player
+        b.x += overlapV.x;
+        b.y += overlapV.y;
+        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == b);
+        room.players[plrIndex].position.x = b.x;
+        room.players[plrIndex].position.y = b.y; */
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.cage) {
+        //player and cage
+        a.x -= overlapV.x;
+        a.y -= overlapV.y;
+        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
+        room.players[plrIndex].position.x = a.x;
+        room.players[plrIndex].position.y = a.y; */
+      }
+    });
+
     //****************
     //update positions
     //****************
@@ -302,12 +371,29 @@ setInterval(() => {
           player.velocity.y = 0;
         }
 
-        player.position = player.position.add(player.velocity);
+        //player.position = player.position.add(player.velocity);
+        player.colliderBody.setPosition(
+          (player.colliderBody.pos.x += player.velocity.x),
+          (player.colliderBody.pos.y += player.velocity.y)
+        );
       });
 
       const stateupdate = {
         type: "stateupdate",
-        state: room,
+        state: {
+          players: room.players.map(player => {
+            return {
+              id: player.id,
+              direction: player.direction,
+              status: player.status,
+              position: player.colliderBody.pos,
+              color: player.color,
+            };
+          }),
+          gamestates: room.gameState,
+          cages: room.cages,
+          map: room.map,
+        },
       };
 
       server.broadcastMessage(key, encoder.encode(JSON.stringify(stateupdate)));
@@ -340,6 +426,7 @@ async function generateNewMap() {
   const map = lm.generateNewMap();
   const coords = findPattern(map, startingpattern);
   if (coords == null) return undefined;
+
   return {
     map,
     coords,
@@ -372,4 +459,66 @@ function findPattern(matrix: number[][], pattern: number[][]): [number, number] 
   }
 
   return null;
+}
+
+type Coordinate = [number, number];
+
+function findEdgeCoordinates(matrix: number[][]): Coordinate[] {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
+
+  const edgeCoordinates: Coordinate[] = [];
+
+  const isOutOfBounds = (row: number, col: number): boolean => {
+    return row < 0 || col < 0 || row >= rows || col >= cols;
+  };
+
+  const isEdgeCoordinate = (row: number, col: number): boolean => {
+    //console.log("edge check: ", row, col, matrix[row][col]);
+
+    if (matrix[row][col] === 255) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if ((dx !== 0 || dy !== 0) && !isOutOfBounds(row + dx, col + dy) && matrix[row + dx][col + dy] === 0) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  };
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (isEdgeCoordinate(row, col)) {
+        edgeCoordinates.push([row, col]);
+      }
+    }
+  }
+
+  return edgeCoordinates;
+}
+
+function addTilesToCollisionSystem(tiles: Coordinate[]): void {
+  tiles.forEach(tile => {
+    dc.insert(createWallBody(new Vector(tile[0] * 16, tile[1] * 16)));
+  });
+}
+
+function createWallBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isStatic: true, isCentered: true }), {
+    cBody: collisionBodyType.wall,
+  });
+}
+
+function createPlayerBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isCentered: true }), {
+    cBody: collisionBodyType.player,
+  });
+}
+
+function createCageBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isStatic: true, isCentered: true }), {
+    cBody: collisionBodyType.cage,
+  });
 }
