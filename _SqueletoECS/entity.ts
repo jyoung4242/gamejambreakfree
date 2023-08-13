@@ -10,10 +10,15 @@ export class Entity {
   <style>
     .entity {
       position: absolute;
-      transition: transform 0.25s;
+      opacity: 1;
+      transition: transform 0.25s, opacity 0.25s;
+    }
+    .entity.pui-adding,
+    .entity.pui-removing{
+      opacity: 0;
     }
   </style>
-  <entity-layer class="entity" style="transform: translate3d(\${position.x}px,\${position.y}px, 0px); width: \${size.x}px; height: \${size.y}px;z-index:\${zindex}">
+  <entity-layer class="entity" style="transform: translate3d(\${position.x}px,\${position.y}px, 0px) rotate(\${orientation}deg); width: \${size.x}px; height: \${size.y}px;z-index:\${zindex}">
     < \${ component === } \${ component <=* components } >
   </entity-layer>
   `;

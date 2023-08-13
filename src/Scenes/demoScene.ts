@@ -22,7 +22,9 @@ import { LevelMaker } from "../levelmaker";
 import { playerEntity } from "../Entities/player";
 import { cageEntity } from "../Entities/cage";
 import { KeypressSystem } from "../Systems/keypress";
-
+import { hudUI } from "../Systems/HUD";
+import { exitEntity } from "../Entities/exit";
+import { RotateSystem } from "../Systems/rotate";
 // Entities
 
 /* *README*
@@ -32,7 +34,11 @@ import { KeypressSystem } from "../Systems/keypress";
   import { DemoEntity } from "../Entities/demo";
 */
 export class Test extends Scene {
-  state: any = [];
+  hud: any;
+  state: any;
+  startGame = () => {
+    this.HathoraClient?.sendMessage("statechange", "startgame");
+  };
   firstUpdate: boolean = true;
   name: string = "test";
   userId: string = "";
@@ -73,10 +79,11 @@ export class Test extends Scene {
     this.userId = this.HathoraClient?.userdata.id as string;
     console.log(this.HathoraClient);
 
+    this.hud = hudUI.create(this.state, this.startGame);
     //establish Scene Systems - Configuring Camera
     let cConfig: ICameraConfig = {
       name: "camera",
-      viewPortSystems: [],
+      viewPortSystems: [this.hud, new RotateSystem()],
       gameEntities: this.entities,
       position: new Vector(0, 0),
       size: new Vector(400, 266.67),
@@ -102,8 +109,6 @@ export class Test extends Scene {
   };
 
   messageHandler = async (message: any) => {
-    console.log(message);
-
     switch (message.type) {
       case "map":
         this.handleMap(JSON.parse(message.msg));
@@ -111,19 +116,14 @@ export class Test extends Scene {
       case "USERLIST":
         let { users, type, roomID } = message;
         users.forEach((user: any) => {
-          console.log(user);
-
           let userIndex = this.camera?.entities.findIndex((ent: any) => {
             return ent.name == user.id;
           });
           if (userIndex == -1) {
-            console.log("found player");
-
             //user not in the entities list
             let playercontrolled;
             if (user.id == this.userId) playercontrolled = true;
             else playercontrolled = false;
-            console.log("playercontrolled: ", playercontrolled);
 
             const newEntity = playerEntity.create(user.id, [user.position.x, user.position.y], user.color, playercontrolled);
             if (playercontrolled) this.camera?.follow(newEntity);
@@ -131,9 +131,19 @@ export class Test extends Scene {
           }
         });
         break;
+      case "UIevent":
+        if (message.msg == "removeCages") {
+          for (let index = this.entities.length - 1; index >= 0; index--) {
+            if (this.entities[index].type == "cage") {
+              this.entities.splice(index, 1);
+            }
+          }
+        }
+        break;
       case "stateupdate":
         this.firstUpdate = updateState(this.firstUpdate, this.entities, this.camera as Camera, message.state, this.userId) as boolean;
         this.state = message.state;
+        this.hud.stateUpdate(this.state);
         break;
     }
   };
@@ -204,38 +214,54 @@ function setBitmappings() {
 function updateState(firsttime: boolean, entities: any, camera: Camera, state: any, userid: string) {
   if (firsttime) {
     firsttime = false;
-    console.log(state);
-    console.log("userid: ", userid);
 
-    state.cages.forEach((cage: Vector) => {
+    state.cages.forEach((cage: { id: string; position: Vector; velocity: Vector; angle: number }) => {
       camera.entities.push(cageEntity.create(cage));
     });
+    console.log("entity check: ", camera.entities);
+
+    camera.entities.push(exitEntity.create(state.exit));
+    console.log("exit", state.exit);
 
     state.players.forEach((player: any) => {
+      console.log("first update", player.position.x, player.position.y);
       addEntity(camera, player, userid);
     });
+    console.log(camera.entities);
+
     return false;
   }
   entities.forEach((entity: any) => {
     //find entity in state
-    if (entity.name) {
-      console.log(entity);
+    let entIndex;
 
-      const entIndex = state.players.findIndex((player: any) => player.id == entity.name);
-      if (entIndex >= 0) {
-        entity.position = state.players[entIndex].position;
-      }
+    switch (entity.type) {
+      case "player":
+        entIndex = state.players.findIndex((player: any) => player.id == entity.name);
+        if (entIndex >= 0) {
+          entity.position = state.players[entIndex].position;
+        }
+        break;
+      case "cage":
+        entIndex = state.cages.findIndex((cage: any) => {
+          return cage.id == entity.sid;
+        });
+
+        if (entIndex >= 0) {
+          entity.position = state.cages[entIndex].position;
+          entity.angVelocity = state.cages[entIndex].angleVelocity;
+          console.log("rotating cage? ", entity.angVelocity);
+        }
+        break;
     }
   });
 }
 
 function addEntity(camera: Camera, player: any, id: string) {
   let playercontrolled;
-  console.log(player.id, id);
 
   if (player.id == id) playercontrolled = true;
   else playercontrolled = false;
-  console.log("playercontrolled: ", playercontrolled);
 
   const newEntity = playerEntity.create(player.id, [player.position.x, player.position.y], player.color, playercontrolled);
   if (playercontrolled) camera?.follow(newEntity);

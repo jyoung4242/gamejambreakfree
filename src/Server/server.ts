@@ -4,7 +4,9 @@ import { resolve } from "path";
 import { LevelMaker } from "../serversideLevelMaker.ts";
 import { Vector } from "../../_SqueletoECS/Vector.ts";
 import { gamestates } from "../projecttypes.ts";
-import { System, Box, RaycastHit } from "detect-collisions";
+import { System, Box, RaycastHit, deg2rad } from "detect-collisions";
+//@ts-ignore
+import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
 
@@ -12,6 +14,7 @@ enum collisionBodyType {
   player,
   wall,
   cage,
+  exit,
 }
 
 type colliderBody = Box & { cBody: collisionBodyType };
@@ -34,7 +37,8 @@ type InternalState = {
   players: InternalPlayer[];
   capacity: number;
   gameState: gamestates;
-  cages: Vector[];
+  cages: { id: string; position: Vector; velocity: Vector; body: colliderBody; angleVelocity: number }[];
+  exit: Vector;
 };
 
 /**************************
@@ -58,8 +62,6 @@ const app: Application = {
   verifyToken: (token: string, roomId: string): Promise<UserId | undefined> => {
     return new Promise((resolve, reject) => {
       const result = verifyJwt(token, process.env.HATHORA_APP_SECRET as string);
-      console.log("token verificaiton: ", token, roomId);
-      console.log(result);
 
       if (result) resolve(result);
       else reject();
@@ -72,40 +74,133 @@ const app: Application = {
        ************************************************/
       if (!rooms.has(roomId)) {
         console.log("creating room");
-        let mapdata: { map: any[]; coords: [number, number] } | undefined;
+        let mapdata: { map: any[]; coords: [number, number]; exit: [number, number] } | undefined;
         do {
           mapdata = await generateNewMap();
         } while (!mapdata);
-        console.log("starting coords", mapdata.coords);
+
         //findEdgeCoordinates and add to collision system
         const bankOfCoords = findEdgeCoordinates(mapdata.map);
         addTilesToCollisionSystem(bankOfCoords);
 
-        let cages: Vector[] = [];
-        cages.push(new Vector(mapdata.coords[0] * 16, mapdata.coords[1] * 16));
-        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, mapdata.coords[1] * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16)));
-        cages.push(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16));
-        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16)));
-        cages.push(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16));
-        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16)));
-        cages.push(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16));
-        dc.insert(createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 1) * 16, (mapdata.coords[1] + 3) * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 1) * 16, (mapdata.coords[1] + 3) * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16)));
-        cages.push(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 3) * 16));
-        dc.insert(createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 3) * 16)));
+        let cages: { id: string; position: Vector; velocity: Vector; body: colliderBody; angleVelocity: number }[] = [];
+        let thisCage = {
+          id: uuidv4(),
+          position: new Vector(mapdata.coords[0] * 16, mapdata.coords[1] * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector(mapdata.coords[0] * 16, mapdata.coords[1] * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16),
+          angleVelocity: 0,
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16)),
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16),
+          angleVelocity: 0,
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16)),
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 1) * 16, (mapdata.coords[1] + 3) * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 1) * 16, (mapdata.coords[1] + 3) * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16),
+          angleVelocity: 0,
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16)),
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+
+        thisCage = {
+          id: uuidv4(),
+          position: new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 3) * 16),
+          velocity: new Vector(0, 0),
+          body: createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 3) * 16)),
+          angleVelocity: 0,
+        };
+        cages.push(thisCage);
+        dc.insert(thisCage.body);
+
+        console.log("starting coord: ", mapdata.coords);
+
+        //Creating Exit entity
+        const myExit = createExitBody(new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16));
+        dc.insert(myExit);
 
         let newRoomState: InternalState = {
           players: [],
@@ -114,6 +209,7 @@ const app: Application = {
           startingCoords: mapdata.coords,
           gameState: gamestates.prestart,
           cages: [...cages],
+          exit: new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16),
         };
         rooms.set(roomId, newRoomState);
       }
@@ -187,7 +283,7 @@ const app: Application = {
       const cbody = createPlayerBody(startingVector);
       const newPlayer: InternalPlayer = {
         id: userId,
-        direction: "down",
+        direction: "none",
         velocity: new Vector(0, 0),
         status: "idle",
         color: myColor,
@@ -259,22 +355,37 @@ const app: Application = {
   onMessage: (roomId: RoomId, userId: UserId, data: ArrayBuffer): Promise<void> => {
     return new Promise(async resolve => {
       const msg = JSON.parse(decoder.decode(data));
-      //console.log(`message from ${userId}, in ${roomId}: `, msg);
 
+      let game: any;
       switch (msg.type) {
         case "sendMap":
           await handleMapRequest(roomId, userId);
           break;
+        case "statechange":
+          console.log("gamestate update from : ", userId, " in room ", roomId, ", new state: ", msg);
+          //confirm room
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+
+          if (game.gameState == gamestates.prestart) {
+            game.gameState = gamestates.startingbanner;
+            setTimeout(() => {
+              game.gameState = gamestates.running;
+              setTimeout(() => {
+                startBreakOut(game, roomId);
+              }, 1000);
+            }, 2000);
+          }
+
+          break;
         case "DirectionUpdate":
           console.log("direction update from : ", userId, " in room ", roomId, "and pressed ", msg);
           //confirm room
-          const game = rooms.get(roomId);
+          game = rooms.get(roomId);
           if (game == undefined) return;
 
           const playerIndex = game.players.findIndex((player: any) => player.id == userId);
           if ((playerIndex as number) >= 0 && game) {
-            console.log("direction change: ", msg.msg);
-
             if (msg.msg != "none") {
               game.players[playerIndex as number].direction = msg.msg;
               game.players[playerIndex as number].status = "walk";
@@ -317,16 +428,20 @@ setInterval(() => {
 
     dc.checkAll(response => {
       let { a, b, overlapV } = response;
+
       if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.wall) {
         //player and wall
         a.x -= overlapV.x;
         a.y -= overlapV.y;
+        //console.log("p/wall collision");
 
         /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
         room.players[plrIndex].position.x = a.x;
         room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.player) {
         //player and player
+        //console.log("p/p collision: ");
+
         b.x += overlapV.x;
         b.y += overlapV.y;
         /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == b);
@@ -334,11 +449,22 @@ setInterval(() => {
         room.players[plrIndex].position.y = b.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.cage) {
         //player and cage
+        //console.log("cage collision");
+
         a.x -= overlapV.x;
         a.y -= overlapV.y;
         /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
         room.players[plrIndex].position.x = a.x;
         room.players[plrIndex].position.y = a.y; */
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.exit) {
+        //player and cage
+        //console.log("exit collision");
+
+        a.x -= overlapV.x;
+        a.y -= overlapV.y;
+        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
+      room.players[plrIndex].position.x = a.x;
+      room.players[plrIndex].position.y = a.y; */
       }
     });
 
@@ -377,27 +503,38 @@ setInterval(() => {
           (player.colliderBody.pos.y += player.velocity.y)
         );
       });
-
-      const stateupdate = {
-        type: "stateupdate",
-        state: {
-          players: room.players.map(player => {
-            return {
-              id: player.id,
-              direction: player.direction,
-              status: player.status,
-              position: player.colliderBody.pos,
-              color: player.color,
-            };
-          }),
-          gamestates: room.gameState,
-          cages: room.cages,
-          map: room.map,
-        },
-      };
-
-      server.broadcastMessage(key, encoder.encode(JSON.stringify(stateupdate)));
     }
+    if (room.cages.length >= 1) {
+      room.cages.forEach(cage => {
+        cage.position = cage.position.add(cage.velocity);
+      });
+    }
+    const stateupdate = {
+      type: "stateupdate",
+      state: {
+        players: room.players.map(player => {
+          return {
+            id: player.id,
+            direction: player.direction,
+            status: player.status,
+            position: player.colliderBody.pos,
+            color: player.color,
+          };
+        }),
+        gamestates: room.gameState,
+        cages: room.cages.map(cage => {
+          return {
+            id: cage.id,
+            position: cage.position,
+            angleVelocity: cage.angleVelocity,
+          };
+        }),
+        exit: room.exit,
+        map: room.map,
+      },
+    };
+
+    server.broadcastMessage(key, encoder.encode(JSON.stringify(stateupdate)));
   });
 }, 100);
 
@@ -427,9 +564,14 @@ async function generateNewMap() {
   const coords = findPattern(map, startingpattern);
   if (coords == null) return undefined;
 
+  //find exit spot
+  const exit = findExit(lm.maze, coords[0], coords[1]);
+  console.log("exit coords: ", exit);
+  if (exit == null) return undefined;
   return {
     map,
     coords,
+    exit,
   };
 }
 
@@ -474,8 +616,6 @@ function findEdgeCoordinates(matrix: number[][]): Coordinate[] {
   };
 
   const isEdgeCoordinate = (row: number, col: number): boolean => {
-    //console.log("edge check: ", row, col, matrix[row][col]);
-
     if (matrix[row][col] === 255) {
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
@@ -506,19 +646,163 @@ function addTilesToCollisionSystem(tiles: Coordinate[]): void {
 }
 
 function createWallBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isStatic: true, isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isStatic: true }), {
     cBody: collisionBodyType.wall,
   });
 }
 
 function createPlayerBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: true }), {
     cBody: collisionBodyType.player,
   });
 }
 
 function createCageBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 16, 16, { isStatic: true, isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
     cBody: collisionBodyType.cage,
   });
+}
+
+function createExitBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
+    cBody: collisionBodyType.exit,
+  });
+}
+
+function startBreakOut(game: InternalState, roomID: RoomId) {
+  //for each cage entity
+  let cageIntervals: NodeJS.Timer[] = [];
+
+  //cage vibration
+  game.cages.forEach((cage, index) => {
+    cageIntervals[index] = setInterval(() => {
+      let dx = Math.random() * 2 - 1;
+      let dy = Math.random() * 2 - 1;
+      cage.position = cage.position.add(new Vector(dx, dy));
+    }, 100);
+  });
+
+  //end vibration and set velocity and delay removal of entity
+  setTimeout(() => {
+    //clear intervals
+    cageIntervals.forEach(int => clearInterval(int));
+    //all cages shoot off away from players and dissappear
+    game.cages[0].velocity = new Vector(8 * Math.cos(deg2rad(-120)), 8 * Math.sin(deg2rad(-120)));
+    game.cages[0].angleVelocity = 3;
+    game.cages[1].velocity = new Vector(8 * Math.cos(deg2rad(-90)), 8 * Math.sin(deg2rad(-90)));
+    game.cages[1].angleVelocity = 3;
+    game.cages[2].velocity = new Vector(8 * Math.cos(deg2rad(-90)), 8 * Math.sin(deg2rad(-90)));
+    game.cages[2].angleVelocity = 3;
+    game.cages[3].velocity = new Vector(8 * Math.cos(deg2rad(-45)), 8 * Math.sin(deg2rad(-45)));
+    game.cages[3].angleVelocity = 3;
+    game.cages[4].velocity = new Vector(8 * Math.cos(deg2rad(180)), 8 * Math.sin(deg2rad(180)));
+    game.cages[4].angleVelocity = 3;
+    game.cages[5].velocity = new Vector(8 * Math.cos(deg2rad(0)), 8 * Math.sin(deg2rad(0)));
+    game.cages[5].angleVelocity = 3;
+    game.cages[6].velocity = new Vector(8 * Math.cos(deg2rad(180)), 8 * Math.sin(deg2rad(180)));
+    game.cages[6].angleVelocity = 3;
+    game.cages[7].velocity = new Vector(8 * Math.cos(deg2rad(0)), 8 * Math.sin(deg2rad(0)));
+    game.cages[7].angleVelocity = 3;
+    game.cages[8].velocity = new Vector(8 * Math.cos(deg2rad(120)), 8 * Math.sin(deg2rad(120)));
+    game.cages[8].angleVelocity = 3;
+    game.cages[9].velocity = new Vector(8 * Math.cos(deg2rad(90)), 8 * Math.sin(deg2rad(90)));
+    game.cages[9].angleVelocity = 3;
+    game.cages[10].velocity = new Vector(8 * Math.cos(deg2rad(90)), 8 * Math.sin(deg2rad(90)));
+    game.cages[10].angleVelocity = 3;
+    game.cages[11].velocity = new Vector(8 * Math.cos(deg2rad(45)), 8 * Math.sin(deg2rad(45)));
+    game.cages[11].angleVelocity = 3;
+    setTimeout(() => {
+      game.cages.forEach(cage => {
+        dc.remove(cage.body);
+      });
+
+      server.broadcastMessage(
+        roomID,
+        encoder.encode(
+          JSON.stringify({
+            type: "UIevent",
+            msg: "removeCages",
+          })
+        )
+      );
+    }, 1500);
+  }, 2000);
+}
+
+function findExit(tiles: number[][], startX: number, startY: number): [number, number] | null {
+  const maxX = tiles.length;
+  const maxY = tiles[0].length;
+  const visited: boolean[][] = Array.from({ length: maxX }, () => Array(maxY).fill(false));
+
+  if (!isWithinBounds(startX, startY, maxX, maxY)) {
+    throw new Error("Invalid starting point");
+  }
+
+  if (tiles[startX][startY] == 255) {
+    throw new Error("Starting point is a wall");
+  }
+
+  const availableExitTiles: number[][] = [];
+  for (let x = 0; x < maxX; x++) {
+    for (let y = 0; y < maxY; y++) {
+      if (tiles[x][y] != 255 && (x !== startX || y !== startY)) {
+        availableExitTiles.push([x, y]);
+      }
+    }
+  }
+
+  if (availableExitTiles.length === 0) {
+    throw new Error("No available exit tiles");
+  }
+
+  let exitX: number;
+  let exitY: number;
+  do {
+    const randomExitTile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    exitX = randomExitTile[0];
+    exitY = randomExitTile[1];
+  } while (isReachable(tiles, startX, startY, exitX, exitY, visited));
+
+  return [exitX, exitY];
+}
+
+function isWithinBounds(x: number, y: number, maxX: number, maxY: number): boolean {
+  return x >= 0 && y >= 0 && x < maxX && y < maxY;
+}
+
+function isReachable(
+  tiles: number[][],
+  currentX: number,
+  currentY: number,
+  exitX: number,
+  exitY: number,
+  visited: boolean[][]
+): boolean {
+  const maxX = tiles.length;
+  const maxY = tiles[0].length;
+
+  if (!isWithinBounds(currentX, currentY, maxX, maxY) || visited[currentX][currentY] || tiles[currentX][currentY] == 255) {
+    return false;
+  }
+
+  visited[currentX][currentY] = true;
+
+  if (currentX === exitX && currentY === exitY) {
+    return true;
+  }
+
+  const neighbors = [
+    [currentX - 1, currentY],
+    [currentX + 1, currentY],
+    [currentX, currentY - 1],
+    [currentX, currentY + 1],
+  ];
+
+  for (const [nextX, nextY] of neighbors) {
+    if (isReachable(tiles, nextX, nextY, exitX, exitY, visited)) {
+      return true;
+    }
+  }
+
+  return false;
 }

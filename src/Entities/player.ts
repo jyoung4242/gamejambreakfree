@@ -7,6 +7,7 @@ export class playerEntity {
     return Entity.create({
       id: uuidv4(),
       components: {
+        type: { data: "player" },
         name: playername,
         size: { data: [16, 16] },
         position: startingPoint,

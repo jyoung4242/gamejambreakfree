@@ -6,6 +6,7 @@
 //  [new Name(),... and all your other components follow]
 // }
 
+import { angVelocity } from "./angVelocity";
 import { ColliderComp } from "./collider";
 import { enemyAIComp } from "./enemyAI";
 import { enemyGenComp } from "./genEnemy";
@@ -14,6 +15,7 @@ import { Name } from "./nameComp";
 import { OrientationComp } from "./orientation";
 import { ColorComp } from "./playerColor";
 import { Position } from "./positionComp";
+import { sID } from "./serverid";
 import { SizeComp } from "./sizeComp";
 import { SpritesComp } from "./sprites";
 import { TypeComp } from "./typeComponent";
@@ -38,5 +40,7 @@ export function LoadComponents() {
     new ColliderComp(),
     new enemyGenComp(),
     new enemyAIComp(),
+    new angVelocity(),
+    new sID(),
   ];
 }
