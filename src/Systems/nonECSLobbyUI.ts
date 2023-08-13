@@ -429,7 +429,7 @@ export class LobbyUI {
     } else {
       await this.HathoraClient?.enterRoom(this.HathoraClient.roomID as string);
       console.log("start game");
-      this.start();
+      this.start(this);
     }
   };
 
@@ -444,7 +444,7 @@ export class LobbyUI {
       await this.HathoraClient?.enterRoom(this.roomJoinInput.value);
       console.log("start game");
 
-      this.start();
+      this.start(this);
     }
   };
 

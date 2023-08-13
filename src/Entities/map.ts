@@ -26,6 +26,7 @@ export class MapEntity {
         zindex: 1,
         size: { data: [w, h] },
         position: new Vector(0, 0),
+        orientation: 0,
         sprites: [
           {
             src: img.src,

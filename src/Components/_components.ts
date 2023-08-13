@@ -8,6 +8,7 @@
 
 import { angVelocity } from "./angVelocity";
 import { ColliderComp } from "./collider";
+import { DebugComp } from "./debug";
 import { enemyAIComp } from "./enemyAI";
 import { enemyGenComp } from "./genEnemy";
 import { KeyboardComp } from "./keyboard";
@@ -42,5 +43,6 @@ export function LoadComponents() {
     new enemyAIComp(),
     new angVelocity(),
     new sID(),
+    new DebugComp(),
   ];
 }

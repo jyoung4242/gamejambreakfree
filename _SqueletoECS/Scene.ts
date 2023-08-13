@@ -16,6 +16,8 @@ export class Scene extends State {
   public async enter(previous: State | null, ...params: any[]) {
     this.view = UI.create(document.body as HTMLElement, this, this.template);
     await this.view.attached;
+    console.log("in scene object: ", params);
+
     this.setScene = params[1];
     this.params = [...params];
     this.init();
