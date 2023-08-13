@@ -438,14 +438,14 @@ setInterval(() => {
         //player and wall
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        console.log("p/wall collision with wall at:  ", b);
+        //console.log("p/wall collision with wall at:  ", b);
 
         /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
         room.players[plrIndex].position.x = a.x;
         room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.player) {
         //player and player
-        console.log("p/p collision: ");
+        //console.log("p/p collision: ");
 
         b.x += overlapV.x;
         b.y += overlapV.y;
@@ -454,7 +454,7 @@ setInterval(() => {
         room.players[plrIndex].position.y = b.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.cage) {
         //player and cage
-        console.log("cage collision");
+        //console.log("cage collision");
 
         a.x -= overlapV.x;
         a.y -= overlapV.y;
@@ -463,7 +463,7 @@ setInterval(() => {
         room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.exit) {
         //player and cage
-        console.log("exit collision");
+        //console.log("exit collision");
 
         a.x -= overlapV.x;
         a.y -= overlapV.y;
@@ -669,7 +669,7 @@ function createCageBody(position: Vector): colliderBody {
 }
 
 function createExitBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isStatic: true }), {
     cBody: collisionBodyType.exit,
   });
 }

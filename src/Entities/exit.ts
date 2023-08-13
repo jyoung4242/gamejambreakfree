@@ -28,7 +28,7 @@ export class exitEntity {
             src: door,
             size: [16, 16],
             angle: 0,
-            offset: [-8, -8], //centers on entity
+            offset: [0, 0], //centers on entity
             animation: exitSprites,
             anchor: new Vector(0, 0),
             fit: "cover",
