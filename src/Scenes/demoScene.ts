@@ -3,6 +3,7 @@ import { Scene } from "../../_SqueletoECS/Scene";
 import { Vector } from "../../_SqueletoECS/Vector";
 import { Engine } from "@peasy-lib/peasy-engine";
 import { AuthenticationType, MultiPlayerInterface } from "../../_SqueletoECS/Multiplayer";
+import { System as dcSystem } from "detect-collisions";
 
 import map from "../Assets/intialtiles.png";
 let mapImage;
@@ -25,6 +26,8 @@ import { KeypressSystem } from "../Systems/keypress";
 import { hudUI } from "../Systems/HUD";
 import { exitEntity } from "../Entities/exit";
 import { RotateSystem } from "../Systems/rotate";
+import { DebugSystem } from "../Systems/debugger";
+import { debugEntity } from "../Entities/debugDC";
 // Entities
 
 /* *README*
@@ -34,6 +37,7 @@ import { RotateSystem } from "../Systems/rotate";
   import { DemoEntity } from "../Entities/demo";
 */
 export class Test extends Scene {
+  debugdata: any;
   hud: any;
   state: any;
   startGame = () => {
@@ -69,11 +73,18 @@ export class Test extends Scene {
     mapsize = new Vector(lm.getMapImageSize().x, lm.getMapImageSize().y);
     if (this.camera) {
       this.entities.push(await MapEntity.create(mapImage, mapsize.x, mapsize.y));
+      this.entities.push(debugEntity.create(mapsize.x, mapsize.y));
     }
   };
 
   public init = async (): Promise<void> => {
+    const dc = new dcSystem();
+    console.log(this.params);
+
     this.HathoraClient = this.params[0];
+    this.debugdata = this.params[1];
+    console.log("in demo, param passed from lobby", this.debugdata);
+
     //(this.HathoraClient as MultiPlayerInterface).updateCallback = this.messageHandler;
     this.HathoraClient?.setUpdateCallback(this.messageHandler);
     this.userId = this.HathoraClient?.userdata.id as string;
@@ -83,7 +94,7 @@ export class Test extends Scene {
     //establish Scene Systems - Configuring Camera
     let cConfig: ICameraConfig = {
       name: "camera",
-      viewPortSystems: [this.hud, new RotateSystem()],
+      viewPortSystems: [this.hud, new RotateSystem(), new DebugSystem(dc, this.debugdata)],
       gameEntities: this.entities,
       position: new Vector(0, 0),
       size: new Vector(400, 266.67),
@@ -130,6 +141,10 @@ export class Test extends Scene {
             this.camera?.entities.push(newEntity);
           }
         });
+        break;
+      case "debug":
+        console.log("DEBUG MESSAGE FROM SERVER", message.data);
+
         break;
       case "UIevent":
         if (message.msg == "removeCages") {
@@ -250,7 +265,7 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
         if (entIndex >= 0) {
           entity.position = state.cages[entIndex].position;
           entity.angVelocity = state.cages[entIndex].angleVelocity;
-          console.log("rotating cage? ", entity.angVelocity);
+          //console.log("rotating cage? ", entity.angVelocity);
         }
         break;
     }

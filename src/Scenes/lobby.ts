@@ -13,18 +13,28 @@ import { LobbyUI } from "../Systems/nonECSLobbyUI";
 //Entities
 
 export class Lobby extends Scene {
+  messageHandler = (msg: any) => {
+    console.log("login:", msg);
+    if (msg.type == "debug") {
+      this.debugData = msg.data;
+      console.log("lobby message: debug", this.debugData);
+    }
+  };
+
+  debugData: any;
   HathoraClient: MultiPlayerInterface = new MultiPlayerInterface(
     "app-f8b439b5-25fe-4860-9635-c36cafc3d194",
-    (msg: any) => {
-      console.log("login:", msg);
-    },
+    this.messageHandler,
     9000,
     [AuthenticationType.anonymous],
     true
   );
   start = () => {
-    console.log("calling states.set()");
-    this.states?.set("test", performance.now(), this.HathoraClient);
+    setTimeout(() => {
+      console.log(this);
+      console.log("calling states.set()", this.debugData);
+      this.states?.set("test", performance.now(), this.HathoraClient, this.debugData);
+    }, 50);
   };
   name: string = "lobby";
   entitySystems: any = [];

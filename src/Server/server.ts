@@ -32,6 +32,7 @@ let currentMap: Array<Array<number>> = [];
 type direction = "right" | "up" | "left" | "down" | "none";
 
 type InternalState = {
+  dc: System;
   map: Array<Array<number>> | undefined;
   startingCoords: [number, number];
   players: InternalPlayer[];
@@ -72,7 +73,9 @@ const app: Application = {
       /*************************************************
        * If room doesn't exist, create it and add to map
        ************************************************/
+      let bankOfCoords;
       if (!rooms.has(roomId)) {
+        let tempDC = new System();
         console.log("creating room");
         let mapdata: { map: any[]; coords: [number, number]; exit: [number, number] } | undefined;
         do {
@@ -80,8 +83,8 @@ const app: Application = {
         } while (!mapdata);
 
         //findEdgeCoordinates and add to collision system
-        const bankOfCoords = findEdgeCoordinates(mapdata.map);
-        addTilesToCollisionSystem(bankOfCoords);
+        bankOfCoords = findEdgeCoordinates(mapdata.map);
+        addTilesToCollisionSystem(bankOfCoords, tempDC);
 
         let cages: { id: string; position: Vector; velocity: Vector; body: colliderBody; angleVelocity: number }[] = [];
         let thisCage = {
@@ -92,7 +95,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector((mapdata.coords[0] + 1) * 16, mapdata.coords[1] * 16),
@@ -101,7 +104,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector((mapdata.coords[0] + 2) * 16, mapdata.coords[1] * 16),
@@ -110,7 +113,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16),
@@ -119,7 +122,7 @@ const app: Application = {
           body: createCageBody(new Vector((mapdata.coords[0] + 3) * 16, mapdata.coords[1] * 16)),
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 1) * 16),
@@ -128,7 +131,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16),
@@ -137,7 +140,7 @@ const app: Application = {
           body: createCageBody(new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 1) * 16)),
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 2) * 16),
@@ -146,7 +149,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector((mapdata.coords[0] + 3) * 16, (mapdata.coords[1] + 2) * 16),
@@ -155,7 +158,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
         thisCage = {
           id: uuidv4(),
           position: new Vector(mapdata.coords[0] * 16, (mapdata.coords[1] + 3) * 16),
@@ -164,7 +167,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
 
         thisCage = {
           id: uuidv4(),
@@ -174,7 +177,7 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
 
         thisCage = {
           id: uuidv4(),
@@ -184,7 +187,7 @@ const app: Application = {
           body: createCageBody(new Vector((mapdata.coords[0] + 2) * 16, (mapdata.coords[1] + 3) * 16)),
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
 
         thisCage = {
           id: uuidv4(),
@@ -194,15 +197,16 @@ const app: Application = {
           angleVelocity: 0,
         };
         cages.push(thisCage);
-        dc.insert(thisCage.body);
+        tempDC.insert(thisCage.body);
 
         console.log("starting coord: ", mapdata.coords);
 
         //Creating Exit entity
         const myExit = createExitBody(new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16));
-        dc.insert(myExit);
+        tempDC.insert(myExit);
 
         let newRoomState: InternalState = {
+          dc: tempDC,
           players: [],
           capacity: 4,
           map: mapdata?.map,
@@ -289,7 +293,7 @@ const app: Application = {
         color: myColor,
         colliderBody: cbody,
       };
-      dc.insert(cbody);
+      game?.dc.insert(cbody);
       game?.players.push(newPlayer);
 
       server.broadcastMessage(
@@ -310,6 +314,8 @@ const app: Application = {
           })
         )
       );
+      console.log("sending debug data");
+      server.sendMessage(roomId, userId, encoder.encode(JSON.stringify({ type: "debug", data: bankOfCoords })));
       resolve();
     });
   },
@@ -418,7 +424,6 @@ const port = 9000;
 const server = await startServer(app, port);
 console.log(`Hathora Server listening on port ${port}`);
 console.log(`Firing up physics system`);
-let dc = new System();
 
 setInterval(() => {
   rooms.forEach((room, key) => {
@@ -426,14 +431,14 @@ setInterval(() => {
     //Collision Check/mgmt
     //***************** */
 
-    dc.checkAll(response => {
+    room.dc.checkAll(response => {
       let { a, b, overlapV } = response;
 
       if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.wall) {
         //player and wall
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        //console.log("p/wall collision");
+        //console.log("p/wall collision with wall at:  ", b);
 
         /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
         room.players[plrIndex].position.x = a.x;
@@ -639,7 +644,7 @@ function findEdgeCoordinates(matrix: number[][]): Coordinate[] {
   return edgeCoordinates;
 }
 
-function addTilesToCollisionSystem(tiles: Coordinate[]): void {
+function addTilesToCollisionSystem(tiles: Coordinate[], dc: System): void {
   tiles.forEach(tile => {
     dc.insert(createWallBody(new Vector(tile[0] * 16, tile[1] * 16)));
   });
@@ -664,7 +669,7 @@ function createCageBody(position: Vector): colliderBody {
 }
 
 function createExitBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isStatic: true }), {
     cBody: collisionBodyType.exit,
   });
 }
@@ -713,7 +718,7 @@ function startBreakOut(game: InternalState, roomID: RoomId) {
     game.cages[11].angleVelocity = 3;
     setTimeout(() => {
       game.cages.forEach(cage => {
-        dc.remove(cage.body);
+        game.dc.remove(cage.body);
       });
 
       server.broadcastMessage(
