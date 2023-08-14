@@ -28,6 +28,10 @@ import { exitEntity } from "../Entities/exit";
 import { RotateSystem } from "../Systems/rotate";
 import { DebugSystem } from "../Systems/debugger";
 import { debugEntity } from "../Entities/debugDC";
+import { keyEntity } from "../Entities/key";
+import { animateSpriteSystem } from "../Systems/animateSprite";
+import { weaponType } from "../Server/server";
+import { weaponEntity } from "../Entities/weapon";
 // Entities
 
 /* *README*
@@ -94,7 +98,7 @@ export class Test extends Scene {
     //establish Scene Systems - Configuring Camera
     let cConfig: ICameraConfig = {
       name: "camera",
-      viewPortSystems: [this.hud, new RotateSystem(), new DebugSystem(dc, this.debugdata)],
+      viewPortSystems: [this.hud, new RotateSystem(), new DebugSystem(dc, this.debugdata), new animateSpriteSystem()],
       gameEntities: this.entities,
       position: new Vector(0, 0),
       size: new Vector(400, 266.67),
@@ -146,13 +150,43 @@ export class Test extends Scene {
         console.log("DEBUG MESSAGE FROM SERVER", message.data);
 
         break;
+      case "weaponstrike":
+        //get weaponstrike data
+        console.log(message.msg);
+
+        let { sid, playerId, weapon, direction } = message.msg;
+        //find playerindex in entities
+        const playerIndex = this.entities.findIndex((ent: any) => ent.name == playerId);
+        if (playerIndex < 0) return;
+        //add weapon entity
+        this.entities.push(
+          weaponEntity.create(sid, weapon, this.entities[playerIndex].position, this.entities[playerIndex].velocity, direction)
+        );
+        break;
       case "UIevent":
+        console.log("UIevent", message.msg);
+
         if (message.msg == "removeCages") {
           for (let index = this.entities.length - 1; index >= 0; index--) {
             if (this.entities[index].type == "cage") {
               this.entities.splice(index, 1);
             }
           }
+        } else if (message.msg == "removekey") {
+          for (let index = this.entities.length - 1; index >= 0; index--) {
+            if (this.entities[index].type == "key") {
+              this.entities.splice(index, 1);
+            }
+          }
+        } else if (message.msg == "openDoor") {
+          //get exit entity
+
+          const rslt = this.entities.filter((ent: any) => {
+            return ent.type == "exit";
+          });
+          console.log(rslt);
+
+          rslt[0].sprites[0].currentSequence = "unlocked";
         }
         break;
       case "stateupdate":
@@ -238,6 +272,9 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
     camera.entities.push(exitEntity.create(state.exit));
     console.log("exit", state.exit);
 
+    camera.entities.push(keyEntity.create(state.key.location));
+    console.log("key", state.key);
+
     state.players.forEach((player: any) => {
       console.log("first update", player.position.x, player.position.y);
       addEntity(camera, player, userid);
@@ -267,6 +304,19 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
           entity.angVelocity = state.cages[entIndex].angleVelocity;
           //console.log("rotating cage? ", entity.angVelocity);
         }
+        break;
+      case "knife":
+        entIndex = state.weapons.findIndex((weapon: any) => {
+          return weapon.sid == entity.sid;
+        });
+        console.log(entity, entIndex, state.weapons);
+        if (entIndex >= 0) {
+          entity.position = state.weapons[entIndex].position;
+        }
+
+        break;
+      case "club":
+        window.alert("club sent from server");
         break;
     }
   });

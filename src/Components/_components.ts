@@ -11,6 +11,7 @@ import { ColliderComp } from "./collider";
 import { DebugComp } from "./debug";
 import { enemyAIComp } from "./enemyAI";
 import { enemyGenComp } from "./genEnemy";
+import { InventoryComp } from "./inventory";
 import { KeyboardComp } from "./keyboard";
 import { Name } from "./nameComp";
 import { OrientationComp } from "./orientation";
@@ -44,5 +45,6 @@ export function LoadComponents() {
     new angVelocity(),
     new sID(),
     new DebugComp(),
+    new InventoryComp(),
   ];
 }

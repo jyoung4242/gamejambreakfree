@@ -11,10 +11,13 @@ import { v4 as uuidv4 } from "uuid";
 dotenv.config();
 
 enum collisionBodyType {
-  player,
-  wall,
-  cage,
-  exit,
+  player = "player",
+  wall = "wall",
+  cage = "cage",
+  exit = "exit",
+  key = "key",
+  club = "club",
+  knife = "knife",
 }
 
 type colliderBody = Box & { cBody: collisionBodyType };
@@ -36,11 +39,26 @@ type InternalState = {
   map: Array<Array<number>> | undefined;
   startingCoords: [number, number];
   players: InternalPlayer[];
+  weapons: colliderBody[];
   capacity: number;
   gameState: gamestates;
   cages: { id: string; position: Vector; velocity: Vector; body: colliderBody; angleVelocity: number }[];
   exit: Vector;
+  key: {
+    location: Vector;
+    status: "available" | "taken";
+  };
 };
+
+export enum weaponType {
+  knife = "knife",
+  whip = "whip",
+  club = "club",
+  rock = "rock",
+  spear = "spear",
+  machete = "machete",
+  none = "none",
+}
 
 /**************************
  * Game State types
@@ -53,6 +71,10 @@ type InternalPlayer = {
   status: "idle" | "walk";
   velocity: Vector;
   color: string;
+  inventory: {
+    possesKey: boolean;
+    weapon: weaponType;
+  };
 };
 
 const encoder = new TextEncoder();
@@ -77,7 +99,7 @@ const app: Application = {
       if (!rooms.has(roomId)) {
         let tempDC = new System();
         console.log("creating room");
-        let mapdata: { map: any[]; coords: [number, number]; exit: [number, number] } | undefined;
+        let mapdata: { map: any[]; coords: [number, number]; exit: number[] | null; key: number[] | null } | undefined | null;
         do {
           mapdata = await generateNewMap();
         } while (!mapdata);
@@ -202,18 +224,32 @@ const app: Application = {
         console.log("starting coord: ", mapdata.coords);
 
         //Creating Exit entity
-        const myExit = createExitBody(new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16));
-        tempDC.insert(myExit);
+        let myExit;
+        if (mapdata.exit) myExit = createExitBody(new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16));
+        tempDC.insert(myExit as colliderBody);
+
+        //Creating Exit entity
+        let myKey;
+        if (mapdata.key) myKey = createKeyBody(new Vector(mapdata.key[0] * 16, mapdata.key[1] * 16));
+        tempDC.insert(myKey as colliderBody);
 
         let newRoomState: InternalState = {
           dc: tempDC,
           players: [],
+          weapons: [],
           capacity: 4,
           map: mapdata?.map,
           startingCoords: mapdata.coords,
           gameState: gamestates.prestart,
           cages: [...cages],
+          //@ts-ignore
           exit: new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16),
+
+          key: {
+            //@ts-ignore
+            location: new Vector(mapdata.key[0] * 16, mapdata.key[1] * 16),
+            status: "available",
+          },
         };
         rooms.set(roomId, newRoomState);
       }
@@ -292,6 +328,10 @@ const app: Application = {
         status: "idle",
         color: myColor,
         colliderBody: cbody,
+        inventory: {
+          possesKey: false,
+          weapon: weaponType.knife,
+        },
       };
       game?.dc.insert(cbody);
       game?.players.push(newPlayer);
@@ -363,12 +403,13 @@ const app: Application = {
       const msg = JSON.parse(decoder.decode(data));
 
       let game: any;
+      let playerIndex: any;
       switch (msg.type) {
         case "sendMap":
           await handleMapRequest(roomId, userId);
           break;
         case "statechange":
-          console.log("gamestate update from : ", userId, " in room ", roomId, ", new state: ", msg);
+          //console.log("gamestate update from : ", userId, " in room ", roomId, ", new state: ", msg);
           //confirm room
           game = rooms.get(roomId);
           if (game == undefined) return;
@@ -384,13 +425,80 @@ const app: Application = {
           }
 
           break;
+        case "weaponEngage":
+          console.log(`${userId} from room ${roomId} firing weapon`);
+
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          if (game.players[playerIndex].inventory.weapon == weaponType.none) return;
+
+          let currentWeapon;
+          let myPosition;
+          let knifeVelocity;
+          switch (game.players[playerIndex].direction) {
+            case "left":
+              myPosition = game.players[playerIndex].colliderBody.pos.add(new Vector(-24, -8));
+              knifeVelocity = new Vector(-10, 0);
+              break;
+            case "right":
+              myPosition = game.players[playerIndex].colliderBody.pos.add(new Vector(8, -8));
+              knifeVelocity = new Vector(10, 0);
+              break;
+            case "down":
+              myPosition = game.players[playerIndex].colliderBody.pos.add(new Vector(-8, 8));
+              knifeVelocity = new Vector(0, 10);
+              break;
+            case "up":
+              myPosition = game.players[playerIndex].colliderBody.pos.add(new Vector(-8, -24));
+              knifeVelocity = new Vector(0, -10);
+              break;
+            default:
+              knifeVelocity = new Vector(0, 0);
+          }
+          console.log(game.players[playerIndex].inventory.weapon);
+
+          switch (game.players[playerIndex].inventory.weapon) {
+            case weaponType.club:
+              currentWeapon = createClubBody(myPosition);
+              break;
+            case weaponType.knife:
+              console.log("creating knive body");
+
+              currentWeapon = createKniveBody(myPosition, knifeVelocity);
+              break;
+          }
+          game.weapons.push(currentWeapon);
+          //tell everyone that your firing weapon
+          //console.log("broadcasting; ", game.players[playerIndex]);
+
+          server.broadcastMessage(
+            roomId,
+            encoder.encode(
+              JSON.stringify({
+                type: "weaponstrike",
+                msg: {
+                  //@ts-ignore
+                  sid: currentWeapon.sid,
+                  playerId: game.players[playerIndex].id,
+                  //@ts-ignore
+                  weapon: currentWeapon.cBody,
+                  //@ts-ignore
+                  position: currentWeapon.pos,
+                  direction: game.players[playerIndex].direction,
+                },
+              })
+            )
+          );
+
+          break;
         case "DirectionUpdate":
-          console.log("direction update from : ", userId, " in room ", roomId, "and pressed ", msg);
+          //console.log("direction update from : ", userId, " in room ", roomId, "and pressed ", msg);
           //confirm room
           game = rooms.get(roomId);
           if (game == undefined) return;
 
-          const playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
           if ((playerIndex as number) >= 0 && game) {
             if (msg.msg != "none") {
               game.players[playerIndex as number].direction = msg.msg;
@@ -438,38 +546,66 @@ setInterval(() => {
         //player and wall
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        //console.log("p/wall collision with wall at:  ", b);
-
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
-        room.players[plrIndex].position.x = a.x;
-        room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.player) {
         //player and player
         //console.log("p/p collision: ");
 
         b.x += overlapV.x;
         b.y += overlapV.y;
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == b);
-        room.players[plrIndex].position.x = b.x;
-        room.players[plrIndex].position.y = b.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.cage) {
         //player and cage
         //console.log("cage collision");
 
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
-        room.players[plrIndex].position.x = a.x;
-        room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.exit) {
         //player and cage
         //console.log("exit collision");
-
         a.x -= overlapV.x;
         a.y -= overlapV.y;
+
+        //get player index
+        const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+        if (plrindex >= 0 && room.players[plrindex].inventory.possesKey == true) {
+          //open door
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "openDoor",
+              })
+            )
+          );
+        }
+
         /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
       room.players[plrIndex].position.x = a.x;
       room.players[plrIndex].position.y = a.y; */
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.key) {
+        console.log("key collision");
+        console.log(room.key.status);
+
+        if (room.key.status == "available") {
+          room.key.status = "taken";
+          console.log("sending key message");
+
+          //get player index
+          const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+          if (plrindex >= 0) {
+            room.players[plrindex].inventory.possesKey = true;
+          }
+
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "removekey",
+              })
+            )
+          );
+        }
       }
     });
 
@@ -514,6 +650,22 @@ setInterval(() => {
         cage.position = cage.position.add(cage.velocity);
       });
     }
+    if (room.weapons.length >= 1) {
+      room.weapons.forEach(weapon => {
+        switch (weapon.cBody) {
+          case collisionBodyType.club:
+            break;
+          case collisionBodyType.knife:
+            //@ts-ignore
+            let posx = (weapon.pos.x += weapon.velocity.x);
+            //@ts-ignore
+            let posy = (weapon.pos.y += weapon.velocity.y);
+            weapon.setPosition(posx, posy);
+            break;
+        }
+      });
+    }
+
     const stateupdate = {
       type: "stateupdate",
       state: {
@@ -535,7 +687,16 @@ setInterval(() => {
           };
         }),
         exit: room.exit,
+        key: room.key,
         map: room.map,
+        weapons: room.weapons.map(weapon => {
+          return {
+            //@ts-ignore
+            sid: weapon.sid,
+            type: weapon.cBody,
+            position: weapon.pos,
+          };
+        }),
       },
     };
 
@@ -570,13 +731,18 @@ async function generateNewMap() {
   if (coords == null) return undefined;
 
   //find exit spot
-  const exit = findExit(lm.maze, coords[0], coords[1]);
-  console.log("exit coords: ", exit);
-  if (exit == null) return undefined;
+  const rslt = findExit(lm.maze, coords[0], coords[1]);
+  let exit, key;
+  if (rslt) {
+    exit = [rslt[0], rslt[1]];
+    key = [rslt[2], rslt[3]];
+  } else return null;
+
   return {
     map,
     coords,
     exit,
+    key,
   };
 }
 
@@ -674,6 +840,27 @@ function createExitBody(position: Vector): colliderBody {
   });
 }
 
+function createKeyBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isStatic: true }), {
+    cBody: collisionBodyType.key,
+  });
+}
+
+function createClubBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isTrigger: true }), {
+    cBody: collisionBodyType.club,
+    sid: uuidv4(),
+  });
+}
+
+function createKniveBody(position: Vector, velocity: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isTrigger: true }), {
+    cBody: collisionBodyType.knife,
+    velocity: velocity,
+    sid: uuidv4(),
+  });
+}
+
 function startBreakOut(game: InternalState, roomID: RoomId) {
   //for each cage entity
   let cageIntervals: NodeJS.Timer[] = [];
@@ -734,7 +921,7 @@ function startBreakOut(game: InternalState, roomID: RoomId) {
   }, 2000);
 }
 
-function findExit(tiles: number[][], startX: number, startY: number): [number, number] | null {
+function findExit(tiles: number[][], startX: number, startY: number): [number, number, number, number] | null {
   const maxX = tiles.length;
   const maxY = tiles[0].length;
   const visited: boolean[][] = Array.from({ length: maxX }, () => Array(maxY).fill(false));
@@ -762,13 +949,20 @@ function findExit(tiles: number[][], startX: number, startY: number): [number, n
 
   let exitX: number;
   let exitY: number;
+  let keyX: number;
+  let keyY: number;
   do {
     const randomExitTile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    const randomKeyTile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
     exitX = randomExitTile[0];
     exitY = randomExitTile[1];
+    keyX = randomKeyTile[0];
+    keyY = randomKeyTile[1];
   } while (isReachable(tiles, startX, startY, exitX, exitY, visited));
 
-  return [exitX, exitY];
+  console.log(exitX, exitY, keyX, keyY);
+
+  return [exitX, exitY, keyX, keyY];
 }
 
 function isWithinBounds(x: number, y: number, maxX: number, maxY: number): boolean {
