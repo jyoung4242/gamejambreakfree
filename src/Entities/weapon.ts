@@ -14,9 +14,9 @@ export type direction = "left" | "right" | "down" | "up";
 
 const clubAnimation = {
   frameRate: 4,
-  default: "engaged",
+  default: "onground",
   sequences: {
-    idle: [[0, 0]],
+    onground: [[0, 0]],
     engaged: [
       [32, 0],
       [48, 0],
@@ -26,19 +26,36 @@ const clubAnimation = {
   },
 };
 const whipAnimation = {
-  frameRate: 10,
-  default: "idle",
+  frameRate: 6,
+  default: "onground",
   sequences: {
-    idle: [[0, 0]],
+    onground: [[0, 0]],
+    engaged: [
+      [16, 0],
+      [32, 0],
+      [48, 0],
+      [64, 0],
+      [80, 0],
+      [98, 0],
+      [98, 0],
+      [98, 0],
+      [98, 0],
+    ],
+  },
+};
+const rockAnimation = {
+  frameRate: 10,
+  default: "onground",
+  sequences: {
+    onground: [[0, 0]],
     engaged: [[0, 0]],
   },
 };
-const rockAnimation = undefined;
 const knifeAnimation = {
   frameRate: 4,
-  default: "engaged",
+  default: "onground",
   sequences: {
-    idle: [[0, 0]],
+    onground: [[0, 0]],
     engaged: [
       [0, 0],
       [16, 0],
@@ -49,9 +66,16 @@ const knifeAnimation = {
 };
 
 export class weaponEntity {
-  static create(id: string, weaponType: weaponType, playerposition: Vector, playervelocity: Vector, playerdirection: direction) {
+  static create(
+    id: string,
+    weaponType: weaponType,
+    playerposition: Vector,
+    playervelocity: Vector,
+    playerdirection: direction,
+    status: string
+  ) {
     let myImage;
-    let myAnimation;
+    let myAnimation = clubAnimation;
     let myPosition: Vector;
     let myAngle: number;
     let myVelocity: Vector = new Vector(0, 0);
@@ -74,6 +98,11 @@ export class weaponEntity {
       case "up":
         myPosition = pposition.add(new Vector(-8, -24));
         myAngle = -90;
+        break;
+      default:
+        playerdirection = "right";
+        myPosition = pposition.add(new Vector(8, -8));
+        myAngle = 0;
         break;
     }
 
@@ -104,13 +133,21 @@ export class weaponEntity {
         myAnimation = clubAnimation;
 
         break;
+      default:
+        myAnimation = clubAnimation;
+        break;
     }
+
+    myAnimation.default = status;
+
+    console.log("weapon creation: ", myImage, weaponType);
+
     return Entity.create({
       id: uuidv4(),
       components: {
+        type: { data: `${weaponType}` },
         position: myPosition,
         sid: id,
-        type: { data: `${weaponType}` },
         size: { data: [16, 16] },
         sprites: [
           {

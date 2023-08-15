@@ -32,6 +32,9 @@ import { keyEntity } from "../Entities/key";
 import { animateSpriteSystem } from "../Systems/animateSprite";
 import { weaponType } from "../Server/server";
 import { weaponEntity } from "../Entities/weapon";
+import { generateEnemySystem } from "../Systems/generateEnemies";
+import { GeneratorEntity } from "../Entities/monsterGenerator";
+import { enemyEntity } from "../Entities/enemy";
 // Entities
 
 /* *README*
@@ -98,7 +101,12 @@ export class Test extends Scene {
     //establish Scene Systems - Configuring Camera
     let cConfig: ICameraConfig = {
       name: "camera",
-      viewPortSystems: [this.hud, new RotateSystem(), new DebugSystem(dc, this.debugdata), new animateSpriteSystem()],
+      viewPortSystems: [
+        this.hud,
+        new RotateSystem(),
+        new DebugSystem(dc, this.debugdata),
+        new animateSpriteSystem(this.HathoraClient as MultiPlayerInterface),
+      ],
       gameEntities: this.entities,
       position: new Vector(0, 0),
       size: new Vector(400, 266.67),
@@ -160,9 +168,25 @@ export class Test extends Scene {
         if (playerIndex < 0) return;
         //add weapon entity
         this.entities.push(
-          weaponEntity.create(sid, weapon, this.entities[playerIndex].position, this.entities[playerIndex].velocity, direction)
+          weaponEntity.create(
+            sid,
+            weapon,
+            this.entities[playerIndex].position,
+            this.entities[playerIndex].velocity,
+            direction,
+            "engaged"
+          )
         );
         break;
+      case "addEnemy": {
+        //get weaponstrike data
+
+        let { sid, state, position, direction } = message.entity;
+
+        //add enemy entity
+        this.entities.push(enemyEntity.create(new Vector(position.x, position.y), sid, state, direction));
+        break;
+      }
       case "UIevent":
         console.log("UIevent", message.msg);
 
@@ -187,7 +211,32 @@ export class Test extends Scene {
           console.log(rslt);
 
           rslt[0].sprites[0].currentSequence = "unlocked";
+        } else if (message.msg == "removeclub") {
+          for (let index = this.entities.length - 1; index >= 0; index--) {
+            if (this.entities[index].type == "club") {
+              this.entities.splice(index, 1);
+            }
+          }
+        } else if (message.msg == "removeknife") {
+          for (let index = this.entities.length - 1; index >= 0; index--) {
+            if (this.entities[index].type == "knife") {
+              this.entities.splice(index, 1);
+            }
+          }
+        } else if (message.msg == "removerock") {
+          for (let index = this.entities.length - 1; index >= 0; index--) {
+            if (this.entities[index].type == "rock") {
+              this.entities.splice(index, 1);
+            }
+          }
+        } else if (message.msg == "removewhip") {
+          for (let index = this.entities.length - 1; index >= 0; index--) {
+            if (this.entities[index].type == "whip") {
+              this.entities.splice(index, 1);
+            }
+          }
         }
+
         break;
       case "stateupdate":
         this.firstUpdate = updateState(this.firstUpdate, this.entities, this.camera as Camera, message.state, this.userId) as boolean;
@@ -264,17 +313,36 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
   if (firsttime) {
     firsttime = false;
 
+    //cages
     state.cages.forEach((cage: { id: string; position: Vector; velocity: Vector; angle: number }) => {
       camera.entities.push(cageEntity.create(cage));
     });
     console.log("entity check: ", camera.entities);
 
+    //exit
     camera.entities.push(exitEntity.create(state.exit));
     console.log("exit", state.exit);
 
+    //key
     camera.entities.push(keyEntity.create(state.key.location));
     console.log("key", state.key);
 
+    //generators
+    console.log("generators: ", state.generators);
+    state.generators.forEach((gen: any) => camera.entities.push(GeneratorEntity.create(gen.position, gen.sid)));
+
+    //weapons
+    console.log("state weapons", state.weapons);
+
+    state.weapons.forEach((weap: any) => {
+      console.log("creating weapon: ", weap);
+
+      camera.entities.push(
+        weaponEntity.create(weap.sid, weap.type, new Vector(weap.position.x, weap.position.y), new Vector(0, 0), "down", "onground")
+      );
+    });
+
+    //players
     state.players.forEach((player: any) => {
       console.log("first update", player.position.x, player.position.y);
       addEntity(camera, player, userid);
@@ -306,17 +374,29 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
         }
         break;
       case "knife":
+      case "club":
+      case "rock":
+      case "whip":
         entIndex = state.weapons.findIndex((weapon: any) => {
           return weapon.sid == entity.sid;
         });
-        console.log(entity, entIndex, state.weapons);
+        //console.log(entity, entIndex, state.weapons);
         if (entIndex >= 0) {
           entity.position = state.weapons[entIndex].position;
         }
 
         break;
-      case "club":
-        window.alert("club sent from server");
+      case "enemy":
+        entIndex = state.enemies.findIndex((en: any) => {
+          return en.sid == entity.sid;
+        });
+        console.log("enemy index: ", entIndex, entity.sid, state.enemies);
+
+        //console.log(entity, entIndex, state.weapons);
+        if (entIndex >= 0) {
+          console.log("enemey position update", state.enemies[entIndex].position);
+          entity.position = state.enemies[entIndex].position;
+        }
         break;
     }
   });

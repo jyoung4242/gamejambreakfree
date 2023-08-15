@@ -1,3 +1,4 @@
+import { MultiPlayerInterface } from "../../_SqueletoECS/Multiplayer";
 import { Entity } from "../../_SqueletoECS/entity";
 import { System } from "../../_SqueletoECS/system";
 import { SpritesComponent } from "../Components/sprites";
@@ -8,9 +9,11 @@ import { TypeComponent } from "../Components/typeComponent";
 export type SpriteEntity = Entity & SpritesComponent & TypeComponent;
 
 export class animateSpriteSystem extends System {
+  client;
   template = ``;
-  public constructor() {
+  public constructor(client: MultiPlayerInterface) {
     super("animate");
+    this.client = client;
   }
 
   public processEntity(entity: SpriteEntity): boolean {
@@ -28,6 +31,7 @@ export class animateSpriteSystem extends System {
       entity.sprites.forEach((sprite: any) => {
         if (sprite.animationSequence) {
           switch (entity.type) {
+            case "whip":
             case "club":
               //this layer is animated
               if (
@@ -38,25 +42,51 @@ export class animateSpriteSystem extends System {
               ) {
                 sprite.frameTik++;
 
-                if (sprite.frameTik == sprite.frameRate) {
-                  sprite.frameIndex++;
-                  sprite.frameTik = 0;
-                  //console.log("in animation update", sprite);
+                if (sprite.currentSequence == "onground") {
+                  if (sprite.frameTik == sprite.frameRate) {
+                    sprite.frameIndex++;
+                    sprite.frameTik = 0;
+                    //console.log("in animation update", sprite);
 
-                  //check if at end of currentsequence array
-                  if (sprite.frameIndex >= sprite.animationSequence.sequences[sprite.currentSequence as string].length) {
-                    entities.splice(index, 1);
-                    return;
+                    //check if at end of currentsequence array
+                    if (sprite.frameIndex >= sprite.animationSequence.sequences[sprite.currentSequence as string].length) {
+                      //@ts-ignore
+                      sprite.frameIndex = 0;
+                      return;
+                    }
+
+                    //update position of sprite based on sequence
+                    sprite.position.x = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][0];
+                    sprite.position.y = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][1];
+                    sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][2]
+                      ? (sprite.flip = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][2])
+                      : (sprite.flip = "1");
+
+                    //console.log("position", sprite.position);
                   }
+                } else {
+                  if (sprite.frameTik == sprite.frameRate) {
+                    sprite.frameIndex++;
+                    sprite.frameTik = 0;
+                    //console.log("in animation update", sprite);
 
-                  //update position of sprite based on sequence
-                  sprite.position.x = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][0];
-                  sprite.position.y = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][1];
-                  sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][2]
-                    ? (sprite.flip = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][2])
-                    : (sprite.flip = "1");
+                    //check if at end of currentsequence array
+                    if (sprite.frameIndex >= sprite.animationSequence.sequences[sprite.currentSequence as string].length) {
+                      //@ts-ignore
+                      this.client.sendMessage("weapon remove", entity.sid);
+                      entities.splice(index, 1);
+                      return;
+                    }
 
-                  //console.log("position", sprite.position);
+                    //update position of sprite based on sequence
+                    sprite.position.x = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][0];
+                    sprite.position.y = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][1];
+                    sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][2]
+                      ? (sprite.flip = sprite.animationSequence.sequences[sprite.currentSequence as string][sprite.frameIndex][2])
+                      : (sprite.flip = "1");
+
+                    //console.log("position", sprite.position);
+                  }
                 }
               }
               break;
