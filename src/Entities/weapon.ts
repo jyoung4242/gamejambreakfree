@@ -8,6 +8,10 @@ import knife from "../Assets/jamknife.png";
 import club from "../Assets/club.png";
 //import machete from '../Assets/machete.png';
 //import spear from '../Assets/spear.png
+//@ts-ignore
+import Chance from "chance";
+
+const chance = new Chance();
 
 export type weaponType = "knife" | "whip" | "machete" | "spear" | "rock" | "club";
 export type direction = "left" | "right" | "down" | "up";
@@ -71,6 +75,7 @@ export class weaponEntity {
     weaponType: weaponType,
     playerposition: Vector,
     playervelocity: Vector,
+
     playerdirection: direction,
     status: string
   ) {
@@ -79,7 +84,7 @@ export class weaponEntity {
     let myPosition: Vector;
     let myAngle: number;
     let myVelocity: Vector = new Vector(0, 0);
-
+    let myDamage: number;
     console.log(playerposition);
     let pposition: Vector = new Vector(playerposition.x, playerposition.y);
     switch (playerdirection) {
@@ -110,31 +115,38 @@ export class weaponEntity {
       case "knife":
         myImage = knife;
         myAnimation = knifeAnimation;
-
+        myDamage = chance.integer({ min: 4, max: 8 });
         break;
       case "whip":
         myImage = whip;
         myAnimation = whipAnimation;
+        myDamage = chance.integer({ min: 6, max: 9 });
         break;
       case "machete":
         myImage = club;
         myAnimation = clubAnimation;
+        myDamage = chance.integer({ min: 3, max: 8 });
         break;
       case "spear":
         myImage = club;
         myAnimation = clubAnimation;
+        myDamage = chance.integer({ min: 6, max: 10 });
         break;
       case "rock":
         myImage = rock;
         myAnimation = rockAnimation;
+        myDamage = chance.integer({ min: 1, max: 5 });
         break;
       case "club":
         myImage = club;
         myAnimation = clubAnimation;
+        myDamage = chance.integer({ min: 2, max: 6 });
 
         break;
       default:
         myAnimation = clubAnimation;
+        myDamage = chance.integer({ min: 2, max: 6 });
+
         break;
     }
 

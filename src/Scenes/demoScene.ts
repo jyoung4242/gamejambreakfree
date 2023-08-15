@@ -187,6 +187,12 @@ export class Test extends Scene {
         this.entities.push(enemyEntity.create(new Vector(position.x, position.y), sid, state, direction));
         break;
       }
+      case "removeenemy": {
+        message.sid;
+        const enIndex = this.entities.findIndex((en: any) => en.sid == message.sid);
+        this.entities.splice(enIndex, 1);
+        break;
+      }
       case "UIevent":
         console.log("UIevent", message.msg);
 
@@ -390,11 +396,11 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
         entIndex = state.enemies.findIndex((en: any) => {
           return en.sid == entity.sid;
         });
-        console.log("enemy index: ", entIndex, entity.sid, state.enemies);
+        //console.log("enemy index: ", entIndex, entity.sid, state.enemies);
 
         //console.log(entity, entIndex, state.weapons);
         if (entIndex >= 0) {
-          console.log("enemey position update", state.enemies[entIndex].position);
+          //console.log("enemey position update", state.enemies[entIndex].position);
           entity.position = state.enemies[entIndex].position;
         }
         break;

@@ -4,6 +4,10 @@ import { Entity } from "../../_SqueletoECS/entity";
 import baddie from "../Assets/Skeleton.png";
 import { Vector } from "../../_SqueletoECS/Vector";
 import { direction } from "./weapon";
+//@ts-ignore
+import Chance from "chance";
+
+const chance = new Chance();
 
 const enemyAnimation = {
   frameRate: 8,
@@ -131,6 +135,7 @@ export class enemyEntity {
       components: {
         position: startingPosition,
         sid: sid,
+
         type: { data: "enemy" },
         zindex: 3,
         // health: { data: 25 },
