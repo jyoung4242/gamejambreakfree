@@ -26,8 +26,8 @@ import { KeypressSystem } from "../Systems/keypress";
 import { hudUI } from "../Systems/HUD";
 import { exitEntity } from "../Entities/exit";
 import { RotateSystem } from "../Systems/rotate";
-import { DebugSystem } from "../Systems/debugger";
-import { debugEntity } from "../Entities/debugDC";
+/* import { DebugSystem } from "../Systems/debugger";
+import { debugEntity } from "../Entities/debugDC"; */
 import { keyEntity } from "../Entities/key";
 import { animateSpriteSystem } from "../Systems/animateSprite";
 import { weaponType } from "../Server/server";
@@ -80,19 +80,14 @@ export class Test extends Scene {
     mapsize = new Vector(lm.getMapImageSize().x, lm.getMapImageSize().y);
     if (this.camera) {
       this.entities.push(await MapEntity.create(mapImage, mapsize.x, mapsize.y));
-      this.entities.push(debugEntity.create(mapsize.x, mapsize.y));
+      //this.entities.push(debugEntity.create(mapsize.x, mapsize.y));
     }
   };
 
   public init = async (): Promise<void> => {
     const dc = new dcSystem();
-    console.log(this.params);
 
     this.HathoraClient = this.params[0];
-    this.debugdata = this.params[1];
-    console.log("in demo, param passed from lobby", this.debugdata);
-
-    //(this.HathoraClient as MultiPlayerInterface).updateCallback = this.messageHandler;
     this.HathoraClient?.setUpdateCallback(this.messageHandler);
     this.userId = this.HathoraClient?.userdata.id as string;
     console.log(this.HathoraClient);
@@ -104,7 +99,7 @@ export class Test extends Scene {
       viewPortSystems: [
         this.hud,
         new RotateSystem(),
-        new DebugSystem(dc, this.debugdata),
+        //  new DebugSystem(dc, this.debugdata),
         new animateSpriteSystem(this.HathoraClient as MultiPlayerInterface),
       ],
       gameEntities: this.entities,
