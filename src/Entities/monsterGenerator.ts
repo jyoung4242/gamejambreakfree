@@ -1,37 +1,31 @@
 //@ts-ignore
 import { v4 as uuidv4 } from "uuid";
 import { Entity } from "../../_SqueletoECS/entity";
-import door from "../Assets/door.png";
+import bonesl from "../Assets/boneslarge.png";
 import { Vector } from "../../_SqueletoECS/Vector";
+import { System as dcSystem } from "detect-collisions";
 
-const exitSprites = {
-  frameRate: 10,
-  default: "locked",
-  sequences: {
-    locked: [[0, 0]],
-    unlocked: [[0, -16]],
-  },
-};
-
-export class exitEntity {
-  static create(position: Vector) {
+export class GeneratorEntity {
+  static create(startingPosition: Vector, sid: string) {
     return Entity.create({
       id: uuidv4(),
       components: {
-        type: { data: "exit" },
-        size: { data: [16, 16] },
-        position: position,
-        zindex: 2,
+        type: { data: "generator" },
+        sid: sid,
+        enemyGen: { data: true },
         orientation: 0,
+        position: startingPosition,
+        zindex: 2,
+        size: { data: [16, 16] },
         sprites: [
           {
-            src: door,
+            src: bonesl,
             size: [16, 16],
             angle: 0,
             offset: [0, 0], //centers on entity
-            animation: exitSprites,
             anchor: new Vector(0, 0),
             fit: "cover",
+            flip: "1",
           },
         ],
       },

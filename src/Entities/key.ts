@@ -1,35 +1,25 @@
 //@ts-ignore
 import { v4 as uuidv4 } from "uuid";
 import { Entity } from "../../_SqueletoECS/entity";
-import door from "../Assets/door.png";
+import key from "../Assets/key.png";
 import { Vector } from "../../_SqueletoECS/Vector";
 
-const exitSprites = {
-  frameRate: 10,
-  default: "locked",
-  sequences: {
-    locked: [[0, 0]],
-    unlocked: [[0, -16]],
-  },
-};
-
-export class exitEntity {
+export class keyEntity {
   static create(position: Vector) {
     return Entity.create({
       id: uuidv4(),
       components: {
-        type: { data: "exit" },
+        type: { data: "key" },
         size: { data: [16, 16] },
         position: position,
         zindex: 2,
         orientation: 0,
         sprites: [
           {
-            src: door,
+            src: key,
             size: [16, 16],
             angle: 0,
             offset: [0, 0], //centers on entity
-            animation: exitSprites,
             anchor: new Vector(0, 0),
             fit: "cover",
           },

@@ -1,20 +1,29 @@
 import { Application, RoomId, startServer, UserId, verifyJwt } from "@hathora/server-sdk";
 import * as dotenv from "dotenv";
-import { resolve } from "path";
 import { LevelMaker } from "../serversideLevelMaker.ts";
 import { Vector } from "../../_SqueletoECS/Vector.ts";
 import { gamestates } from "../projecttypes.ts";
-import { System, Box, RaycastHit, deg2rad } from "detect-collisions";
+import { System, Box, deg2rad } from "detect-collisions";
+//@ts-ignore
+import Chance from "chance";
 //@ts-ignore
 import { v4 as uuidv4 } from "uuid";
 
 dotenv.config();
+const chance = new Chance();
 
 enum collisionBodyType {
-  player,
-  wall,
-  cage,
-  exit,
+  player = "player",
+  wall = "wall",
+  cage = "cage",
+  exit = "exit",
+  key = "key",
+  club = "club",
+  knife = "knife",
+  rock = "rock",
+  whip = "whip",
+  enemy = "enemy",
+  generator = "generator",
 }
 
 type colliderBody = Box & { cBody: collisionBodyType };
@@ -33,14 +42,45 @@ type direction = "right" | "up" | "left" | "down" | "none";
 
 type InternalState = {
   dc: System;
+  scoreTik: number;
   map: Array<Array<number>> | undefined;
   startingCoords: [number, number];
   players: InternalPlayer[];
+  weapons: colliderBody[];
   capacity: number;
   gameState: gamestates;
   cages: { id: string; position: Vector; velocity: Vector; body: colliderBody; angleVelocity: number }[];
   exit: Vector;
+  exitCoords: number[];
+  keyCoords: number[];
+  generators: colliderBody[];
+  key: {
+    location: Vector;
+    status: "available" | "taken";
+  };
+  enemyGenTik: number;
+  enemyGenTrigger: number;
+  enemies: colliderBody[];
 };
+
+export enum enemyState {
+  idle = "idle",
+  scanning = "scanning",
+  patrol = "patrol",
+  attack = "attack",
+  damage = "damage",
+  moving = "moving",
+}
+
+export enum weaponType {
+  knife = "knife",
+  whip = "whip",
+  club = "club",
+  rock = "rock",
+  spear = "spear",
+  machete = "machete",
+  none = "none",
+}
 
 /**************************
  * Game State types
@@ -53,6 +93,10 @@ type InternalPlayer = {
   status: "idle" | "walk";
   velocity: Vector;
   color: string;
+  inventory: {
+    possesKey: boolean;
+    weapon: weaponType;
+  };
 };
 
 const encoder = new TextEncoder();
@@ -77,7 +121,21 @@ const app: Application = {
       if (!rooms.has(roomId)) {
         let tempDC = new System();
         console.log("creating room");
-        let mapdata: { map: any[]; coords: [number, number]; exit: [number, number] } | undefined;
+        let mapdata:
+          | {
+              map: any[];
+              coords: [number, number];
+              exit: number[];
+              key: number[];
+              w1: number[];
+              w2: number[];
+              w3: number[];
+              w4: number[];
+              g1: number[];
+              g2: number[];
+            }
+          | undefined
+          | null;
         do {
           mapdata = await generateNewMap();
         } while (!mapdata);
@@ -199,21 +257,77 @@ const app: Application = {
         cages.push(thisCage);
         tempDC.insert(thisCage.body);
 
-        console.log("starting coord: ", mapdata.coords);
-
         //Creating Exit entity
-        const myExit = createExitBody(new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16));
-        tempDC.insert(myExit);
+        let myExit;
+        if (mapdata.exit) myExit = createExitBody(new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16));
+        tempDC.insert(myExit as colliderBody);
+
+        //Creating Key entity
+        let myKey;
+        if (mapdata.key) myKey = createKeyBody(new Vector(mapdata.key[0] * 16, mapdata.key[1] * 16));
+        tempDC.insert(myKey as colliderBody);
+
+        //Creating weapon entity
+        let myW1;
+
+        if (mapdata.key) myW1 = createClubBody(new Vector(mapdata.w1[0] * 16, mapdata.w1[1] * 16), new Vector(0, 0), false);
+        tempDC.insert(myW1 as colliderBody);
+
+        //Creating weapon entity
+        let myW2;
+
+        if (mapdata.key) myW2 = createKniveBody(new Vector(mapdata.w2[0] * 16, mapdata.w2[1] * 16), new Vector(0, 0), false);
+        tempDC.insert(myW2 as colliderBody);
+
+        //Creating weapon entity
+        let myW3;
+
+        if (mapdata.key) myW3 = createRockBody(new Vector(mapdata.w3[0] * 16, mapdata.w3[1] * 16), new Vector(0, 0), false);
+        tempDC.insert(myW3 as colliderBody);
+
+        //Creating weapon entity
+        let myW4;
+
+        if (mapdata.key) myW4 = createWhipBody(new Vector(mapdata.w4[0] * 16, mapdata.w4[1] * 16), new Vector(0, 0), false);
+        tempDC.insert(myW4 as colliderBody);
+
+        let weaps = [myW1, myW2, myW3, myW4];
+
+        //Creating generator entity
+        let g1, g2;
+
+        if (mapdata.key)
+          g1 = createEnemyGeneratorBody(new Vector(mapdata.g1[0] * 16, mapdata.g1[1] * 16), [mapdata.g1[0], mapdata.g1[1]]);
+        tempDC.insert(g1 as colliderBody);
+
+        if (mapdata.key)
+          g2 = createEnemyGeneratorBody(new Vector(mapdata.g2[0] * 16, mapdata.g2[1] * 16), [mapdata.g2[0], mapdata.g2[1]]);
+        tempDC.insert(g2 as colliderBody);
 
         let newRoomState: InternalState = {
+          scoreTik: 0,
           dc: tempDC,
+          exitCoords: [...mapdata.exit],
+          keyCoords: [...mapdata.key],
           players: [],
+          weapons: [...weaps] as colliderBody[],
           capacity: 4,
           map: mapdata?.map,
+          enemyGenTik: 0,
+          enemyGenTrigger: 25,
+          enemies: [],
           startingCoords: mapdata.coords,
           gameState: gamestates.prestart,
           cages: [...cages],
+          generators: [g1 as colliderBody, g2 as colliderBody],
+          //@ts-ignore
           exit: new Vector(mapdata.exit[0] * 16, mapdata.exit[1] * 16),
+
+          key: {
+            //@ts-ignore
+            location: new Vector(mapdata.key[0] * 16, mapdata.key[1] * 16),
+            status: "available",
+          },
         };
         rooms.set(roomId, newRoomState);
       }
@@ -292,6 +406,10 @@ const app: Application = {
         status: "idle",
         color: myColor,
         colliderBody: cbody,
+        inventory: {
+          possesKey: false,
+          weapon: weaponType.none,
+        },
       };
       game?.dc.insert(cbody);
       game?.players.push(newPlayer);
@@ -314,8 +432,8 @@ const app: Application = {
           })
         )
       );
-      console.log("sending debug data");
-      server.sendMessage(roomId, userId, encoder.encode(JSON.stringify({ type: "debug", data: bankOfCoords })));
+
+      //server.sendMessage(roomId, userId, encoder.encode(JSON.stringify({ type: "debug", data: bankOfCoords })));
       resolve();
     });
   },
@@ -349,6 +467,13 @@ const app: Application = {
         server.broadcastMessage(roomId, encoder.encode(JSON.stringify(leftMessage)));
         game?.players.splice(plrIndex as number, 1);
       }
+
+      //cleanup
+      if (game?.players.length == 0) {
+        game.gameState == gamestates.gameover;
+        game.enemies = [];
+      }
+
       resolve();
     });
   },
@@ -363,12 +488,12 @@ const app: Application = {
       const msg = JSON.parse(decoder.decode(data));
 
       let game: any;
+      let playerIndex: any;
       switch (msg.type) {
         case "sendMap":
           await handleMapRequest(roomId, userId);
           break;
         case "statechange":
-          console.log("gamestate update from : ", userId, " in room ", roomId, ", new state: ", msg);
           //confirm room
           game = rooms.get(roomId);
           if (game == undefined) return;
@@ -384,13 +509,96 @@ const app: Application = {
           }
 
           break;
+        case "weapon remove":
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+          const wid = msg.msg;
+          const windex = game.weapons.findIndex((w: any) => w.sid == wid);
+          game.dc.remove(game.weapons[windex]);
+          game.weapons.splice(windex, 1);
+
+          break;
+        case "weaponEngage":
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          if (game.players[playerIndex].inventory.weapon == weaponType.none) return;
+
+          let currentWeapon;
+          let myPosition = new Vector(0, 0);
+          let knifeVelocity;
+          let currentposition = game.players[playerIndex].colliderBody.pos;
+          switch (game.players[playerIndex].direction) {
+            case "left":
+              myPosition = new Vector(currentposition.x - 24, currentposition.y - 8);
+              knifeVelocity = new Vector(-10, 0);
+              break;
+            case "right":
+              myPosition = new Vector(currentposition.x + 8, currentposition.y - 8);
+              //myPosition = currentposition.add(new Vector(8, -8));
+              knifeVelocity = new Vector(10, 0);
+              break;
+            case "down":
+              myPosition = new Vector(currentposition.x - 8, currentposition.y + 8);
+              //myPosition = currentposition.add(new Vector(-8, 8));
+              knifeVelocity = new Vector(0, 10);
+              break;
+            case "up":
+              myPosition = new Vector(currentposition.x - 8, currentposition.y - 24);
+              // myPosition = currentposition.add(new Vector(-8, -24));
+              knifeVelocity = new Vector(0, -10);
+              break;
+            default:
+              knifeVelocity = new Vector(0, 0);
+          }
+
+          switch (game.players[playerIndex].inventory.weapon) {
+            case weaponType.club:
+              currentWeapon = createClubBody(myPosition, game.players[playerIndex].velocity, true);
+              break;
+            case weaponType.knife:
+              currentWeapon = createKniveBody(myPosition, knifeVelocity, true);
+              break;
+            case weaponType.rock:
+              currentWeapon = createRockBody(myPosition, knifeVelocity, true);
+              break;
+            case weaponType.whip:
+              currentWeapon = createWhipBody(myPosition, game.players[playerIndex].velocity, true);
+
+              break;
+          }
+          game.dc.insert(currentWeapon);
+          game.weapons.push(currentWeapon);
+          //tell everyone that your firing weapon
+
+          server.broadcastMessage(
+            roomId,
+            encoder.encode(
+              JSON.stringify({
+                type: "weaponstrike",
+                msg: {
+                  //@ts-ignore
+                  sid: currentWeapon.sid,
+                  playerId: game.players[playerIndex].id,
+                  //@ts-ignore
+                  weapon: currentWeapon.cBody,
+                  //@ts-ignore
+                  status: currentWeapon.status,
+                  //@ts-ignore
+                  position: currentWeapon.pos,
+                  direction: game.players[playerIndex].direction,
+                },
+              })
+            )
+          );
+
+          break;
         case "DirectionUpdate":
-          console.log("direction update from : ", userId, " in room ", roomId, "and pressed ", msg);
           //confirm room
           game = rooms.get(roomId);
           if (game == undefined) return;
 
-          const playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
           if ((playerIndex as number) >= 0 && game) {
             if (msg.msg != "none") {
               game.players[playerIndex as number].direction = msg.msg;
@@ -427,6 +635,236 @@ console.log(`Firing up physics system`);
 
 setInterval(() => {
   rooms.forEach((room, key) => {
+    //******************* */
+    //score tik
+    //******************* */
+
+    if (room.gameState == gamestates.running) {
+      room.scoreTik++;
+      if (room.scoreTik >= 10) {
+        room.scoreTik = 0;
+        //@ts-ignore
+        room.players.forEach(plr => (plr.colliderBody.score += 1));
+      }
+    }
+
+    //******************* */
+    //Monster Gen Tik
+    //*********************/
+    if (room.gameState == gamestates.running) room.enemyGenTik++;
+
+    if (room.enemyGenTik >= room.enemyGenTrigger) {
+      room.enemyGenTik = 0;
+      //generate enemy room.enemies.length < 1
+      if (true) {
+        room.generators.forEach((gen: any, index: number) => {
+          //if (index > 0) return;
+          const tempVector = new Vector(gen.pos.x, gen.pos.y);
+          //if enemy is close, don't spawn another
+          if (
+            !room.enemies.some(en => {
+              const VecA: Vector = tempVector;
+              const VecB: Vector = new Vector(en.pos.x, en.pos.y);
+              const distance = VecA.subtract(VecB).magnitude;
+              return distance <= 16;
+            })
+          ) {
+            const randomVectors = generateRandomVectors(tempVector);
+            for (let index = 0; index < randomVectors.length; index++) {
+              const thisVector = randomVectors[index];
+              const startingVector = tempVector.add(thisVector);
+              const endingVector = startingVector.add(thisVector);
+              const hit = room.dc.raycast(startingVector, endingVector);
+
+              if (hit) {
+                continue;
+              } else {
+                //generate enemy here
+                const myEnemy = createEnemyBody(startingVector, gen.coords);
+                room.enemies.push(myEnemy);
+                room.dc.insert(myEnemy);
+                server.broadcastMessage(
+                  key,
+                  encoder.encode(
+                    JSON.stringify({
+                      type: "addEnemy",
+                      entity: {
+                        position: myEnemy.pos,
+                        //@ts-ignore
+                        state: myEnemy.state,
+                        //@ts-ignore
+                        direction: myEnemy.direction,
+                        //@ts-ignore
+                        sid: myEnemy.sid,
+                      },
+                    })
+                  )
+                );
+                break;
+              }
+            }
+          }
+        });
+      }
+    }
+
+    //******************* */
+    //Enemy AI
+    //******************* */
+
+    room.enemies.forEach((en: any) => {
+      //@ts-ignore
+      //console.log(en.state);
+
+      switch (en.state as enemyState) {
+        case enemyState.idle:
+          //console.log(`${en.sid} in Idle state`);
+
+          if (en.AIlimit == 0) {
+            //initialization of AI
+            en.AIlimit = 20;
+            en.AItik = 0;
+            en.isColliding = false;
+          }
+          en.AItik++;
+
+          if (en.AItik >= en.AIlimit) {
+            //switch states
+            //idle --> scanning
+            en.state = enemyState.scanning;
+            en.AItik = 0;
+            en.AIlimit = 12;
+          }
+          break;
+        case enemyState.scanning:
+          //console.log(`${en.sid} in scanning state`);
+          if (en.AIlimit == 0) {
+            //initialization of AI
+            en.AIlimit = 12;
+            en.AItik = 0;
+          }
+          en.AItik++;
+
+          //while waiting to scan, change directions
+          if (en.AItik <= 3) {
+            en.direction = "down";
+          } else if (en.AItik > 3 && en.AItik <= 6) {
+            en.direction = "left";
+          } else if (en.AItik > 6 && en.AItik <= 9) {
+            en.direction = "up";
+          } else {
+            en.direction = "right";
+          }
+
+          if (en.AItik >= en.AIlimit) {
+            en.direction = "down";
+            //scan routine, and make decision
+            //get distance to each player
+            //console.log(`${en.sid} scanning for playres`);
+            room.players.forEach(plr => {
+              //get magnitud of difference Vector
+
+              const VecA: Vector = new Vector(plr.colliderBody.pos.x, plr.colliderBody.pos.y);
+              const VecB: Vector = new Vector(en.pos.x, en.pos.y);
+              const LOSVectorNorm = VecA.subtract(VecB).normalize();
+              const startingVector = VecB.add(LOSVectorNorm.add(new Vector(10, 10)));
+              const distance = VecA.subtract(VecB).magnitude;
+
+              if (distance > 125) {
+                return;
+              }
+
+              // player close enough, is in line of sight?
+              const hit = room.dc.raycast(startingVector, VecA);
+              //@ts-ignore
+              if (hit && hit.body.cBody == "player") {
+                en.target = hit.body;
+                en.state = enemyState.attack;
+                en.AItik = 0;
+                en.AIlimit = 5;
+                return;
+              }
+            });
+            if (en.state != enemyState.attack) {
+              // if no players nearby --> patrol
+              // just looped through all the players, so we go on patrol
+              // console.log(`${en.sid} no found player, patrolling`);
+              en.state = enemyState.patrol;
+              en.AItik = 0;
+              en.AIlimit = 5;
+            }
+          }
+
+          break;
+        case enemyState.patrol:
+          //console.log(`${en.sid} IN patrol!!!!`);
+
+          //choose random spot near either door or key
+          const tempVector = new Vector(en.pos.x, en.pos.y);
+          const randomVectors = generateRandomVectors(tempVector);
+          for (let index = 0; index < randomVectors.length; index++) {
+            const thisVector = randomVectors[index];
+            const startingVector = tempVector.add(thisVector);
+            const endingVector = startingVector.add(thisVector);
+            const hit = room.dc.raycast(startingVector, endingVector);
+
+            if (hit) {
+              continue;
+            } else {
+              //move to ending Vector
+              en.state = enemyState.moving;
+              en.destinationVector = endingVector;
+              //console.log(`${en.sid} found open spot`);
+              break;
+            }
+          }
+
+          break;
+        case enemyState.moving:
+          //console.log(`${en.sid} --> moving`);
+          let movementVector = en.destinationVector.subtract(new Vector(en.pos.x, en.pos.y));
+
+          //console.log(`${en.sid} --> moving Vector: ${movementVector.x}, ${movementVector.y}`);
+          //clean movement
+          movementVector = new Vector(Math.floor(movementVector.x), Math.floor(movementVector.y));
+          let deltax = 0,
+            deltay = 0;
+
+          //test for arriving at location
+          if (movementVector.x == 0 && movementVector.y == 0) {
+            //arrived!
+            en.state = enemyState.idle;
+            en.AItik = 0;
+            en.AIlimit = 20;
+            break;
+          }
+
+          if (movementVector.x > 0) deltax = 1;
+          else if (movementVector.x < 0) deltax = -1;
+          if (movementVector.y > 0) deltay = 1;
+          else if (movementVector.y < 0) deltay = -1;
+          //console.log(`${en.sid} --> updated position: ${en.pos.x + deltax}, ${en.pos.y + deltay}`);
+          en.setPosition(en.pos.x + deltax, en.pos.y + deltay);
+
+          break;
+        case enemyState.attack:
+          //console.log(`${en.sid} is attacking ${en.target.sid}`);
+          // console.log(en.target);
+
+          //get vector between en and target
+          const VecA = new Vector(en.pos.x, en.pos.y);
+          const VecB = new Vector(en.target.pos.x, en.target.pos.y);
+          const attackVector = VecB.subtract(VecA);
+          const attackVectorNorm = attackVector.normalize();
+          //console.log("enemy:", VecA, "player:", VecB, "attack Vector", attackVector, "norm: ", attackVectorNorm);
+          en.setPosition(en.pos.x + attackVectorNorm.x * 1.5, en.pos.y + attackVectorNorm.y * 1.5);
+
+          break;
+        case enemyState.damage:
+          break;
+      }
+    });
+
     //***************** */
     //Collision Check/mgmt
     //***************** */
@@ -438,38 +876,359 @@ setInterval(() => {
         //player and wall
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        //console.log("p/wall collision with wall at:  ", b);
-
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
-        room.players[plrIndex].position.x = a.x;
-        room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.player) {
         //player and player
-        //console.log("p/p collision: ");
 
         b.x += overlapV.x;
         b.y += overlapV.y;
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == b);
-        room.players[plrIndex].position.x = b.x;
-        room.players[plrIndex].position.y = b.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.cage) {
         //player and cage
-        //console.log("cage collision");
 
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
-        room.players[plrIndex].position.x = a.x;
-        room.players[plrIndex].position.y = a.y; */
       } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.exit) {
         //player and cage
-        //console.log("exit collision");
 
         a.x -= overlapV.x;
         a.y -= overlapV.y;
-        /* const plrIndex = room.players.findIndex(plr => plr.colliderBody == a);
-      room.players[plrIndex].position.x = a.x;
-      room.players[plrIndex].position.y = a.y; */
+
+        //get player index
+        const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+        if (plrindex >= 0 && room.players[plrindex].inventory.possesKey == true) {
+          //open door
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 20;
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "openDoor",
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.key) {
+        if (room.key.status == "available") {
+          room.key.status = "taken";
+
+          //get player index
+          const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+          if (plrindex >= 0) {
+            room.players[plrindex].inventory.possesKey = true;
+            //@ts-ignore
+            room.players[plrindex].colliderBody.score += 15;
+          }
+
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "removekey",
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.club) {
+        //get player index
+
+        const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+
+        if (plrindex >= 0 && room.players[plrindex].inventory.weapon == weaponType.none) {
+          //pick up weapon
+          room.players[plrindex].inventory.weapon = weaponType.club;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 5;
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "removeclub",
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.knife) {
+        //get player index
+        const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+
+        if (plrindex >= 0 && room.players[plrindex].inventory.weapon == weaponType.none) {
+          //pick up weapon
+          room.dc.remove(b);
+          room.players[plrindex].inventory.weapon = weaponType.knife;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 10;
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "removeknife",
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.knife && (b as colliderBody).cBody == collisionBodyType.wall) {
+        if (a.status == "onground") return;
+        //get player index
+
+        const windex = room.weapons.findIndex(w => w == a);
+        //knife hit wall, remove entity
+        room.weapons.splice(windex, 1);
+        room.dc.remove(a);
+        server.broadcastMessage(
+          key,
+          encoder.encode(
+            JSON.stringify({
+              type: "UIevent",
+              msg: "removeknife",
+            })
+          )
+        );
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.rock) {
+        //get player index
+        const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+
+        if (plrindex >= 0 && room.players[plrindex].inventory.weapon == weaponType.none) {
+          //pick up weapon
+
+          //find index in room.weapons
+          const windex = room.weapons.findIndex(w => w == b);
+
+          if (windex < 0) return;
+          room.weapons.splice(windex, 1);
+          room.dc.remove(b);
+
+          room.players[plrindex].inventory.weapon = weaponType.rock;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 5;
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "removerock",
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.rock && (b as colliderBody).cBody == collisionBodyType.wall) {
+        if (a.status == "onground") return;
+        //get player index
+
+        const windex = room.weapons.findIndex(w => w == a);
+        //knife hit wall, remove entity
+        room.weapons.splice(windex, 1);
+        room.dc.remove(a);
+        server.broadcastMessage(
+          key,
+          encoder.encode(
+            JSON.stringify({
+              type: "UIevent",
+              msg: "removerock",
+            })
+          )
+        );
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.whip) {
+        //get player index
+        const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
+
+        if (plrindex >= 0 && room.players[plrindex].inventory.weapon == weaponType.none) {
+          //pick up weapon
+
+          //find index in room.weapons
+          const windex = room.weapons.findIndex(w => w == b);
+
+          if (windex < 0) return;
+          room.weapons.splice(windex, 1);
+          room.dc.remove(b);
+
+          room.players[plrindex].inventory.weapon = weaponType.whip;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 15;
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "UIevent",
+                msg: "removewhip",
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.player && (b as colliderBody).cBody == collisionBodyType.generator) {
+        //player and wall
+
+        a.x -= overlapV.x;
+        a.y -= overlapV.y;
+      } else if ((a as colliderBody).cBody == collisionBodyType.enemy && (b as colliderBody).cBody == collisionBodyType.wall) {
+        //player and wall
+
+        if (a.state == enemyState.moving && !a.isColliding) {
+          a.isColliding = true;
+          a.x -= overlapV.x * 1.5;
+          a.y -= overlapV.y * 1.5;
+          a.state = enemyState.idle;
+          a.destinationVector = new Vector(0, 0);
+        } else if (a.state == enemyState.attack) {
+          a.x -= overlapV.x * 1.5;
+          a.y -= overlapV.y * 1.5;
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.enemy && (b as colliderBody).cBody == collisionBodyType.generator) {
+        //player and wall
+
+        a.x -= overlapV.x;
+        a.y -= overlapV.y;
+        //a.state = enemyState.idle;
+      } else if ((a as colliderBody).cBody == collisionBodyType.enemy && (b as colliderBody).cBody == collisionBodyType.enemy) {
+        //player and wall
+
+        if (a.state == enemyState.moving) {
+          if (!a.isColliding) {
+            b.x += overlapV.x;
+            b.y += overlapV.y;
+            a.x -= overlapV.x;
+            a.y -= overlapV.y;
+            a.state = enemyState.idle;
+            a.destinationVector = new Vector(0, 0);
+            a.isColliding = true;
+            b.state = enemyState.idle;
+            b.destinationVector = new Vector(0, 0);
+          }
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.knife && (b as colliderBody).cBody == collisionBodyType.enemy) {
+        if (a.status == "onground") return;
+        //get player index
+
+        const windex = room.weapons.findIndex(w => w == a);
+        //knife hit wall, remove entity
+        room.weapons.splice(windex, 1);
+        room.dc.remove(a);
+        server.broadcastMessage(
+          key,
+          encoder.encode(
+            JSON.stringify({
+              type: "UIevent",
+              msg: "removeknife",
+            })
+          )
+        );
+
+        b.health -= a.damage;
+
+        if (b.health <= 0) {
+          //@ts-ignore
+          const enIndex = room.enemies.findIndex(en => en.sid == b.sid);
+          room.enemies.splice(enIndex, 1);
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "removeenemy",
+                sid: b.sid,
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.rock && (b as colliderBody).cBody == collisionBodyType.enemy) {
+        if (a.status == "onground") return;
+        //get player index
+
+        const windex = room.weapons.findIndex(w => w == a);
+        //rock hit enemy, remove entity
+        room.weapons.splice(windex, 1);
+        room.dc.remove(a);
+        server.broadcastMessage(
+          key,
+          encoder.encode(
+            JSON.stringify({
+              type: "UIevent",
+              msg: "removerock",
+            })
+          )
+        );
+
+        b.health -= a.damage;
+        if (b.health <= 0) {
+          //@ts-ignore
+          const enIndex = room.enemies.findIndex(en => en.sid == b.sid);
+          room.enemies.splice(enIndex, 1);
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "removeenemy",
+                sid: b.sid,
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.club && (b as colliderBody).cBody == collisionBodyType.enemy) {
+        if (a.status == "onground") return;
+        //get player index
+
+        b.health -= a.damage;
+        if (b.health <= 0) {
+          //@ts-ignore
+          const enIndex = room.enemies.findIndex(en => en.sid == b.sid);
+          room.enemies.splice(enIndex, 1);
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "removeenemy",
+                sid: b.sid,
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.whip && (b as colliderBody).cBody == collisionBodyType.enemy) {
+        if (a.status == "onground") return;
+        //get player index
+
+        b.health -= a.damage;
+        if (b.health <= 0) {
+          //@ts-ignore
+          const enIndex = room.enemies.findIndex(en => en.sid == b.sid);
+          room.enemies.splice(enIndex, 1);
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "removeenemy",
+                sid: b.sid,
+              })
+            )
+          );
+        }
+      } else if ((a as colliderBody).cBody == collisionBodyType.enemy && (b as colliderBody).cBody == collisionBodyType.player) {
+        b.health -= a.damage;
+        if (b.health <= 0) {
+          const plrIndex = room.players.findIndex(plr => plr.colliderBody == b);
+          //remove player from game..
+          room.players.splice(plrIndex, 1);
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "removeplayer",
+                sid: b.sid,
+              })
+            )
+          );
+          //have Camera find another player
+          //TODOif no other players - game over and go back to Lobby or play again
+        }
+      } else {
+        //console.log("collision", a, b);
       }
     });
 
@@ -514,6 +1273,47 @@ setInterval(() => {
         cage.position = cage.position.add(cage.velocity);
       });
     }
+
+    if (room.weapons.length >= 1) {
+      let posx, posy;
+      room.weapons.forEach((weapon, index) => {
+        switch (weapon.cBody) {
+          case collisionBodyType.club:
+            //@ts-ignore
+            posx = weapon.pos.x += weapon.velocity.x;
+            //@ts-ignore
+            posy = weapon.pos.y += weapon.velocity.y;
+            weapon.setPosition(posx, posy);
+            break;
+          case collisionBodyType.knife:
+            //@ts-ignore
+            posx = weapon.pos.x += weapon.velocity.x;
+            //@ts-ignore
+            posy = weapon.pos.y += weapon.velocity.y;
+            weapon.setPosition(posx, posy);
+            break;
+          case collisionBodyType.rock:
+            //@ts-ignore
+
+            posx = weapon.pos.x += weapon.velocity.x;
+            //@ts-ignore
+            posy = weapon.pos.y += weapon.velocity.y;
+            weapon.setPosition(posx, posy);
+
+            break;
+          case collisionBodyType.whip:
+            //@ts-ignore
+
+            posx = weapon.pos.x += weapon.velocity.x;
+            //@ts-ignore
+            posy = weapon.pos.y += weapon.velocity.y;
+            weapon.setPosition(posx, posy);
+
+            break;
+        }
+      });
+    }
+
     const stateupdate = {
       type: "stateupdate",
       state: {
@@ -524,6 +1324,14 @@ setInterval(() => {
             status: player.status,
             position: player.colliderBody.pos,
             color: player.color,
+            //@ts-ignore
+            health: Math.floor((player.colliderBody.health / 25) * 100),
+            //@ts-ignore
+            score: player.colliderBody.score,
+            inventory: {
+              key: player.inventory.possesKey,
+              weapon: player.inventory.weapon,
+            },
           };
         }),
         gamestates: room.gameState,
@@ -535,7 +1343,34 @@ setInterval(() => {
           };
         }),
         exit: room.exit,
+        enemies: room.enemies.map(en => {
+          return {
+            //@ts-ignore
+            sid: en.sid,
+            position: en.pos,
+            //@ts-ignore
+            direction: en.direction,
+            //@ts-ignore
+            state: en.state,
+          };
+        }),
+        generators: room.generators.map(gen => {
+          return {
+            position: gen.pos,
+            //@ts-ignore
+            sid: gen.sid,
+          };
+        }),
+        key: room.key,
         map: room.map,
+        weapons: room.weapons.map(weapon => {
+          return {
+            //@ts-ignore
+            sid: weapon.sid,
+            type: weapon.cBody,
+            position: weapon.pos,
+          };
+        }),
       },
     };
 
@@ -544,13 +1379,6 @@ setInterval(() => {
 }, 100);
 
 async function handleMapRequest(room: string, user: string) {
-  /* if (currentMap.length == 0) {
-    let rslt;
-    do {
-      rslt = await generateNewMap();
-    } while (rslt == undefined);
-  } */
-
   server.sendMessage(
     room,
     user,
@@ -570,13 +1398,30 @@ async function generateNewMap() {
   if (coords == null) return undefined;
 
   //find exit spot
-  const exit = findExit(lm.maze, coords[0], coords[1]);
-  console.log("exit coords: ", exit);
-  if (exit == null) return undefined;
+  const rslt = findExit(lm.maze, coords[0], coords[1]);
+  let exit, key, w1, w2, w3, w4, g1, g2;
+  if (rslt) {
+    exit = [rslt[0], rslt[1]];
+    key = [rslt[2], rslt[3]];
+    w1 = [rslt[4], rslt[5]];
+    w2 = [rslt[6], rslt[7]];
+    w3 = [rslt[8], rslt[9]];
+    w4 = [rslt[10], rslt[11]];
+    g1 = [rslt[12], rslt[13]];
+    g2 = [rslt[14], rslt[15]];
+  } else return null;
+
   return {
     map,
     coords,
     exit,
+    key,
+    w1,
+    w2,
+    w3,
+    w4,
+    g1,
+    g2,
   };
 }
 
@@ -659,6 +1504,9 @@ function createWallBody(position: Vector): colliderBody {
 function createPlayerBody(position: Vector): colliderBody {
   return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: true }), {
     cBody: collisionBodyType.player,
+    sid: uuidv4(),
+    health: 25,
+    score: 0,
   });
 }
 
@@ -671,6 +1519,99 @@ function createCageBody(position: Vector): colliderBody {
 function createExitBody(position: Vector): colliderBody {
   return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isStatic: true }), {
     cBody: collisionBodyType.exit,
+  });
+}
+
+function createKeyBody(position: Vector): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isStatic: true }), {
+    cBody: collisionBodyType.key,
+  });
+}
+
+function createClubBody(position: Vector, velocity: Vector, engaged: boolean): colliderBody {
+  let status;
+  if (engaged) status = "engaged";
+  else status = "onground";
+
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isTrigger: true }), {
+    cBody: collisionBodyType.club,
+    status: status,
+    velocity: velocity,
+    sid: uuidv4(),
+    damage: chance.integer({ min: 2, max: 6 }),
+  });
+}
+
+function createKniveBody(position: Vector, velocity: Vector, engaged: boolean): colliderBody {
+  let status;
+  if (engaged) status = "engaged";
+  else status = "onground";
+
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isTrigger: true }), {
+    cBody: collisionBodyType.knife,
+    status: status,
+    velocity: velocity,
+    sid: uuidv4(),
+    damage: chance.integer({ min: 4, max: 8 }),
+  });
+}
+
+function createRockBody(position: Vector, velocity: Vector, engaged: boolean): colliderBody {
+  let status;
+  if (engaged) status = "engaged";
+  else status = "onground";
+
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isTrigger: true }), {
+    cBody: collisionBodyType.rock,
+    status: status,
+    velocity: velocity,
+    sid: uuidv4(),
+    damage: chance.integer({ min: 1, max: 5 }),
+  });
+}
+
+function createWhipBody(position: Vector, velocity: Vector, engaged: boolean): colliderBody {
+  let status;
+  if (engaged) status = "engaged";
+  else status = "onground";
+
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isTrigger: true }), {
+    cBody: collisionBodyType.whip,
+    status: status,
+    velocity: velocity,
+    sid: uuidv4(),
+    damage: chance.integer({ min: 6, max: 9 }),
+  });
+}
+
+function createEnemyGeneratorBody(position: Vector, coords: [number, number]): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
+    cBody: collisionBodyType.generator,
+    sid: uuidv4(),
+    coords: coords,
+  });
+}
+
+function createEnemyBody(position: Vector, coords: [number, number]): colliderBody {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: true }), {
+    cBody: collisionBodyType.enemy,
+    sid: uuidv4(),
+    velocity: new Vector(0, 0),
+    state: enemyState.idle,
+    direction: "down",
+    AItik: 0,
+    AIlimit: 0,
+    target: null,
+    destinationVector: new Vector(0, 0),
+    patrolCoords: [0, 0],
+    currentCoords: [0, 0],
+    remainingAmountToMove: 0,
+    patrolPath: [],
+    patrolIndex: 0,
+    isColliding: false,
+    patrolState: "idle",
+    health: chance.integer({ min: 7, max: 15 }),
+    damage: chance.integer({ min: 4, max: 10 }),
   });
 }
 
@@ -716,11 +1657,11 @@ function startBreakOut(game: InternalState, roomID: RoomId) {
     game.cages[10].angleVelocity = 3;
     game.cages[11].velocity = new Vector(8 * Math.cos(deg2rad(45)), 8 * Math.sin(deg2rad(45)));
     game.cages[11].angleVelocity = 3;
-    setTimeout(() => {
-      game.cages.forEach(cage => {
-        game.dc.remove(cage.body);
-      });
 
+    game.cages.forEach(cage => {
+      game.dc.remove(cage.body);
+    });
+    setTimeout(() => {
       server.broadcastMessage(
         roomID,
         encoder.encode(
@@ -734,7 +1675,13 @@ function startBreakOut(game: InternalState, roomID: RoomId) {
   }, 2000);
 }
 
-function findExit(tiles: number[][], startX: number, startY: number): [number, number] | null {
+function findExit(
+  tiles: number[][],
+  startX: number,
+  startY: number
+):
+  | [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number]
+  | null {
   const maxX = tiles.length;
   const maxY = tiles[0].length;
   const visited: boolean[][] = Array.from({ length: maxX }, () => Array(maxY).fill(false));
@@ -762,13 +1709,103 @@ function findExit(tiles: number[][], startX: number, startY: number): [number, n
 
   let exitX: number;
   let exitY: number;
+  let keyX: number;
+  let keyY: number;
+  let weapon1x: number;
+  let weapon1y: number;
+  let weapon2x: number;
+  let weapon2y: number;
+  let weapon3x: number;
+  let weapon3y: number;
+  let weapon4x: number;
+  let weapon4y: number;
+  let g1x, g2x, g1y, g2y;
+  let g1, g2;
   do {
+    console.log("maploop");
+
     const randomExitTile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    const randomKeyTile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    const w1Tile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    const w2Tile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    const w3Tile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    const w4Tile = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+    let distance1, distance2;
+    do {
+      g1 = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+      distance1 = Math.sqrt(
+        (randomExitTile[0] - g1[0]) * (randomExitTile[0] - g1[0]) + (randomExitTile[1] - g1[1]) * (randomExitTile[1] - g1[1])
+      );
+    } while (distance1 > 7);
+    do {
+      g2 = availableExitTiles[Math.floor(Math.random() * availableExitTiles.length)];
+      distance2 = Math.sqrt(
+        (randomKeyTile[0] - g2[0]) * (randomExitTile[0] - g2[0]) + (randomKeyTile[1] - g2[1]) * (randomKeyTile[1] - g2[1])
+      );
+    } while (distance2 > 7);
+
     exitX = randomExitTile[0];
     exitY = randomExitTile[1];
-  } while (isReachable(tiles, startX, startY, exitX, exitY, visited));
+    keyX = randomKeyTile[0];
+    keyY = randomKeyTile[1];
+    weapon1x = w1Tile[0];
+    weapon1y = w1Tile[1];
+    weapon2x = w2Tile[0];
+    weapon2y = w2Tile[1];
+    weapon3x = w3Tile[0];
+    weapon3y = w3Tile[1];
+    weapon4x = w4Tile[0];
+    weapon4y = w4Tile[1];
+    g1x = g1[0];
+    g1y = g1[1];
+    g2x = g2[0];
+    g2y = g2[1];
+  } while (
+    !isReachable(tiles, startX, startY, exitX, exitY, visited) &&
+    !isReachable(tiles, startX, startY, keyX, keyY, visited) &&
+    !isReachable(tiles, startX, startY, weapon1x, weapon1y, visited) &&
+    !isReachable(tiles, startX, startY, weapon2x, weapon2y, visited) &&
+    !isReachable(tiles, startX, startY, weapon3x, weapon3y, visited) &&
+    !isReachable(tiles, startX, startY, weapon4x, weapon4y, visited)
+  );
 
-  return [exitX, exitY];
+  /*console.log(
+    exitX,
+    exitY,
+    keyX,
+    keyY,
+    weapon1x,
+    weapon1y,
+    weapon2x,
+    weapon2y,
+    weapon3x,
+    weapon3y,
+    weapon4x,
+    weapon4y,
+    g1x,
+    g1y,
+    g2x,
+    g2y
+  );*/
+
+  return [
+    exitX,
+    exitY,
+    keyX,
+    keyY,
+    weapon1x,
+    weapon1y,
+    weapon2x,
+    weapon2y,
+    weapon3x,
+    weapon3y,
+    weapon4x,
+    weapon4y,
+    g1x,
+    g1y,
+    g2x,
+    g2y,
+  ];
 }
 
 function isWithinBounds(x: number, y: number, maxX: number, maxY: number): boolean {
@@ -810,4 +1847,28 @@ function isReachable(
   }
 
   return false;
+}
+
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function generateRandomVectors(startingVector: Vector): Array<Vector> {
+  const tileVectors: Vector[] = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) {
+        continue; // Skip the center tile (entity's position)
+      }
+      const raycastVector = new Vector(dx, dy).multiply(10);
+
+      tileVectors.push(raycastVector);
+    }
+  }
+  return shuffleArray(tileVectors);
 }

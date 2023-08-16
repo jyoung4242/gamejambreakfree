@@ -33,13 +33,13 @@ export class DebugSystem extends System {
       if (entity.debug.myCanvas == undefined) return;
       if (entity.debug.myCtx == null) return;
       if (this.firsttimeflag) {
-        console.log("loading debug entities");
+        //console.log("loading debug entities");
         this.firsttimeflag = false;
 
         this.debugentities.forEach((ent: any) => {
           this.dc.insert(new Box({ x: ent[0] * 16, y: ent[1] * 16 }, 16, 16, { isStatic: true }));
         });
-        console.log(this.debugentities);
+        //console.log(this.debugentities);
       }
       entity.debug.myCtx.clearRect(0, 0, entity.debug.myCanvas.width, entity.debug.myCanvas.height);
       entity.debug.myCtx.strokeStyle = "#FFFFFF";

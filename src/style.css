@@ -1,53 +1,165 @@
-/*style.css*/ 
+/*style.css*/
 body {
- box-sizing: border-box;
- padding: 0;
- margin: 0;
- line-height: 1;
- background-color: var(--current-background);
- color: var(--current-foreground);
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  background-color: var(--current-background);
+  color: var(--current-foreground);
 }
 .color1 {
- color: #131617;
+  color: #131617;
 }
 .color2 {
-color: #34393c;
+  color: #34393c;
 }
 .color3 {
- color: #5e676b;
+  color: #5e676b;
 }
 .color4 {
- color: #929fa4;
+  color: #929fa4;
 }
 .color5 {
- color: #d0e3e9;
+  color: #d0e3e9;
 }
- :root {  
- /* Dark theme */  
-  --dark-background: #34393c;  
-  --dark-dark-accent: #131617; 
-  --dark-neutral: #5e676b; 
-  --dark-light-accent: #929fa4;  
-  --dark-foregeound: #d0e3e9;  
-  /* Light theme */  
-  --light-background: #d0e3e9; 
-  --light-dark-accent: #131617; 
-  --light-foregeound: #34393c; 
-  --light-neutral: #5e676b; 
-  --light-light-accent: #929fa4; 
-  /* Defaults */ 
-  --current-background: var(--light-background); 
-  --current-dark-accent: var(--light-dark-accent); 
-  --current-light-accent: var(--light-light-accent); 
-  --current-foreground: var(--light-foregeound);  
-  --current-neutral: var(--light-neutral); 
-  } 
-  @media (prefers-color-scheme: dark) { 
+:root {
+  /* Dark theme */
+  --dark-background: #34393c;
+  --dark-dark-accent: #131617;
+  --dark-neutral: #5e676b;
+  --dark-light-accent: #929fa4;
+  --dark-foregeound: #d0e3e9;
+  /* Light theme */
+  --light-background: #d0e3e9;
+  --light-dark-accent: #131617;
+  --light-foregeound: #34393c;
+  --light-neutral: #5e676b;
+  --light-light-accent: #929fa4;
+  /* Defaults */
+  --current-background: var(--light-background);
+  --current-dark-accent: var(--light-dark-accent);
+  --current-light-accent: var(--light-light-accent);
+  --current-foreground: var(--light-foregeound);
+  --current-neutral: var(--light-neutral);
+}
+@media (prefers-color-scheme: dark) {
   :root {
-  --current-background: var(--dark-background);
-  --current-foreground: var(--dark-foregeound);
-  --current-dark-accent: var(--dark-dark-accent);
-  --current-light-accent: var(--dark-light-accent);
-  --current-neutral: var(--dark-neutral);
+    --current-background: var(--dark-background);
+    --current-foreground: var(--dark-foregeound);
+    --current-dark-accent: var(--dark-dark-accent);
+    --current-light-accent: var(--dark-light-accent);
+    --current-neutral: var(--dark-neutral);
   }
-  }
+}
+
+.gameHUD {
+  position: absolute;
+  width: 15%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+}
+
+.heroUI {
+  width: 100%;
+  height: 20%;
+  /*  border: 1px solid blue; */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 2px;
+  font-family: Arial, Helvetica, sans-serif;
+  /*  border: 1px solid rgb(240, 209, 107);
+  border-radius: 3px; */
+}
+
+.firstline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  width: 100%;
+}
+
+.avatar {
+  width: 20px;
+  aspect-ratio: 1/1;
+  display: block;
+}
+
+.id {
+  font-size: 0.4vw;
+}
+
+.health {
+  width: 95%;
+  border: grey 1px solid;
+  height: 6%;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.innerhealth {
+  background: limegreen;
+  height: 100%;
+}
+
+.points {
+  width: 100%;
+  text-align: center;
+  font-size: 0.5vw;
+}
+
+.inventory {
+  width: 95%;
+  height: 12%;
+
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 1px;
+  image-rendering: pixelated;
+}
+
+.rock {
+  width: 5px;
+  aspect-ratio: 1/1;
+  background-image: url("./Assets/rock.png");
+  background-size: 10px;
+  background-position: -2px -3px;
+  background-repeat: no-repeat;
+}
+.whip {
+  width: 5px;
+  aspect-ratio: 1/1;
+  background-image: url("./Assets/whip.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.club {
+  width: 5px;
+  aspect-ratio: 1/1;
+  background-image: url("./Assets/club.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 1px 0px;
+}
+.knife {
+  width: 5px;
+  aspect-ratio: 1/1;
+  background-image: url("./Assets/tknife.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.key {
+  width: 5px;
+  aspect-ratio: 1/1;
+  background-image: url("./Assets/key.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}

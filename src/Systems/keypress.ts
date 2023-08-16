@@ -34,12 +34,19 @@ export class KeypressSystem extends System {
     this.serverConnection = HthraConnection;
 
     document.addEventListener("keydown", (e: KeyboardEvent) => {
-      let dir = keys[e.code];
-      if (dir && this.held_direction.indexOf(dir) === -1) {
-        this.held_direction.unshift(dir);
+      if (e.code == "Space") {
+        console.log("firing weapon to server");
+
+        this.serverConnection.sendMessage("weaponEngage", "none");
+      } else {
+        let dir = keys[e.code];
+        if (dir && this.held_direction.indexOf(dir) === -1) {
+          this.held_direction.unshift(dir);
+        }
       }
     });
     document.addEventListener("keyup", (e: KeyboardEvent) => {
+      if (e.code == "Space") return;
       var dir = keys[e.code];
       var index = this.held_direction.indexOf(dir);
       if (index > -1) {
@@ -68,13 +75,11 @@ export class KeypressSystem extends System {
       }
 
       if (this.held_direction[0] != this.lastkeypressed) {
-        console.log(this.held_direction);
-
         if (this.held_direction.length == 0 || this.held_direction[0] == undefined) {
-          console.log("sending none");
+          //console.log("sending none");
           this.serverConnection.sendMessage("DirectionUpdate", "none");
         } else {
-          console.log("sending: ", this.held_direction[0]);
+          //console.log("sending: ", this.held_direction[0]);
           this.serverConnection.sendMessage("DirectionUpdate", this.held_direction[0]);
         }
         this.lastkeypressed = this.held_direction[0];

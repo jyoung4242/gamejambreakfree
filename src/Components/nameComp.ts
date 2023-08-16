@@ -36,8 +36,6 @@ export class Name extends Component {
   }
 
   public define(data: string): void {
-    console.log("name define: ", data);
-
     if (data == null) {
       return;
     }

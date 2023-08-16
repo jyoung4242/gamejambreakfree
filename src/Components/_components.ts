@@ -8,9 +8,11 @@
 
 import { angVelocity } from "./angVelocity";
 import { ColliderComp } from "./collider";
+import { damageComp } from "./damage";
 import { DebugComp } from "./debug";
 import { enemyAIComp } from "./enemyAI";
 import { enemyGenComp } from "./genEnemy";
+import { InventoryComp } from "./inventory";
 import { KeyboardComp } from "./keyboard";
 import { Name } from "./nameComp";
 import { OrientationComp } from "./orientation";
@@ -22,6 +24,7 @@ import { SpritesComp } from "./sprites";
 import { TypeComp } from "./typeComponent";
 import { Velocity } from "./velocityComp";
 import { ZindexComp } from "./zindexComp";
+import { healthComp } from "./health";
 
 // The template component is demonstrated by default, you'll probably
 // want to replace it
@@ -44,5 +47,8 @@ export function LoadComponents() {
     new angVelocity(),
     new sID(),
     new DebugComp(),
+    new InventoryComp(),
+    new damageComp(),
+    new healthComp(),
   ];
 }
