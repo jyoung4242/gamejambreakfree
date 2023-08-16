@@ -9,11 +9,12 @@ import { LoadComponents } from "./Components/_components";
 //Scenes
 import { Test } from "./Scenes/demoScene";
 import { Lobby } from "./Scenes/lobby";
+import { CharCustom } from "./Scenes/customization";
 
 //Components
 LoadComponents();
 
 //Load Scenes
 let sceneMgr = new SceneManager();
-sceneMgr.register(Test, Lobby);
+sceneMgr.register(Test, Lobby, CharCustom);
 sceneMgr.set("lobby");

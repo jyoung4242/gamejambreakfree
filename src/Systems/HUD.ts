@@ -9,6 +9,10 @@ export class hudUI {
     if (this.state) return this.state.gamestates == gamestates.prestart;
     return null;
   }
+  get gameHUDFlag() {
+    if (this.state) return this.state.gamestates == gamestates.running;
+    return null;
+  }
 
   public template = `
 <style>
@@ -108,6 +112,26 @@ export class hudUI {
         <div class="mainBanner" \${===bannerFlag}>
             <div class="bannertext">STARTING GAME</div>
         </div>
+        <div class="gameHUD" \${===gameHUDFlag}>
+            <div class="heroUI" \${hero<=*state.players:id}>
+              <div class="firstline">
+                <div class="avatar" style="background: \${hero.color}"></div>
+                <div class="id">\${hero.id}</div>
+              </div>
+              
+              <div class="health">
+                <div class="innerhealth" style="width: \${hero.health}%"></div>
+              </div>
+              <div class="points">\${hero.score}</div>
+              <div class="inventory">
+                  <div class='key'></div>
+                  <div class='rock'></div>
+                  <div class='whip'></div>
+                  <div class='club'></div>
+                  <div class='knife'></div>
+              </div>
+            </div>
+        </div>
     </div>
 </div>
   `;
@@ -116,13 +140,19 @@ export class hudUI {
 
   private constructor(public state: any, start: Function) {
     this.startGame = start;
+    console.log(state);
   }
 
   public static create(state: any, startcallbck: Function): hudUI {
     return new hudUI(state, startcallbck);
   }
 
-  public update() {}
+  public update(deltaTime: number, now: number, entities: [], state: any) {
+    if (state) {
+      console.log(state.players);
+      this.state = state;
+    }
+  }
 
   stateUpdate(state: any) {
     //console.log(state);

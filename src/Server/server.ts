@@ -42,6 +42,7 @@ type direction = "right" | "up" | "left" | "down" | "none";
 
 type InternalState = {
   dc: System;
+  scoreTik: number;
   map: Array<Array<number>> | undefined;
   startingCoords: [number, number];
   players: InternalPlayer[];
@@ -304,6 +305,7 @@ const app: Application = {
         tempDC.insert(g2 as colliderBody);
 
         let newRoomState: InternalState = {
+          scoreTik: 0,
           dc: tempDC,
           exitCoords: [...mapdata.exit],
           keyCoords: [...mapdata.key],
@@ -431,7 +433,7 @@ const app: Application = {
         )
       );
 
-      server.sendMessage(roomId, userId, encoder.encode(JSON.stringify({ type: "debug", data: bankOfCoords })));
+      //server.sendMessage(roomId, userId, encoder.encode(JSON.stringify({ type: "debug", data: bankOfCoords })));
       resolve();
     });
   },
@@ -633,6 +635,19 @@ console.log(`Firing up physics system`);
 
 setInterval(() => {
   rooms.forEach((room, key) => {
+    //******************* */
+    //score tik
+    //******************* */
+
+    if (room.gameState == gamestates.running) {
+      room.scoreTik++;
+      if (room.scoreTik >= 10) {
+        room.scoreTik = 0;
+        //@ts-ignore
+        room.players.forEach(plr => (plr.colliderBody.score += 1));
+      }
+    }
+
     //******************* */
     //Monster Gen Tik
     //*********************/
@@ -881,6 +896,8 @@ setInterval(() => {
         const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
         if (plrindex >= 0 && room.players[plrindex].inventory.possesKey == true) {
           //open door
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 20;
           server.broadcastMessage(
             key,
             encoder.encode(
@@ -899,6 +916,8 @@ setInterval(() => {
           const plrindex = room.players.findIndex(plr => plr.colliderBody == a);
           if (plrindex >= 0) {
             room.players[plrindex].inventory.possesKey = true;
+            //@ts-ignore
+            room.players[plrindex].colliderBody.score += 15;
           }
 
           server.broadcastMessage(
@@ -919,6 +938,8 @@ setInterval(() => {
         if (plrindex >= 0 && room.players[plrindex].inventory.weapon == weaponType.none) {
           //pick up weapon
           room.players[plrindex].inventory.weapon = weaponType.club;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 5;
           room.dc.remove(b);
           server.broadcastMessage(
             key,
@@ -938,6 +959,8 @@ setInterval(() => {
           //pick up weapon
           room.dc.remove(b);
           room.players[plrindex].inventory.weapon = weaponType.knife;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 10;
           server.broadcastMessage(
             key,
             encoder.encode(
@@ -980,6 +1003,8 @@ setInterval(() => {
           room.dc.remove(b);
 
           room.players[plrindex].inventory.weapon = weaponType.rock;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 5;
           server.broadcastMessage(
             key,
             encoder.encode(
@@ -1022,6 +1047,8 @@ setInterval(() => {
           room.dc.remove(b);
 
           room.players[plrindex].inventory.weapon = weaponType.whip;
+          //@ts-ignore
+          room.players[plrindex].colliderBody.score += 15;
           server.broadcastMessage(
             key,
             encoder.encode(
@@ -1091,6 +1118,7 @@ setInterval(() => {
         );
 
         b.health -= a.damage;
+
         if (b.health <= 0) {
           //@ts-ignore
           const enIndex = room.enemies.findIndex(en => en.sid == b.sid);
@@ -1183,7 +1211,21 @@ setInterval(() => {
       } else if ((a as colliderBody).cBody == collisionBodyType.enemy && (b as colliderBody).cBody == collisionBodyType.player) {
         b.health -= a.damage;
         if (b.health <= 0) {
-          //TODO player death code here
+          const plrIndex = room.players.findIndex(plr => plr.colliderBody == b);
+          //remove player from game..
+          room.players.splice(plrIndex, 1);
+          room.dc.remove(b);
+          server.broadcastMessage(
+            key,
+            encoder.encode(
+              JSON.stringify({
+                type: "removeplayer",
+                sid: b.sid,
+              })
+            )
+          );
+          //have Camera find another player
+          //TODOif no other players - game over and go back to Lobby or play again
         }
       } else {
         //console.log("collision", a, b);
@@ -1282,6 +1324,14 @@ setInterval(() => {
             status: player.status,
             position: player.colliderBody.pos,
             color: player.color,
+            //@ts-ignore
+            health: Math.floor((player.colliderBody.health / 25) * 100),
+            //@ts-ignore
+            score: player.colliderBody.score,
+            inventory: {
+              key: player.inventory.possesKey,
+              weapon: player.inventory.weapon,
+            },
           };
         }),
         gamestates: room.gameState,
@@ -1456,6 +1506,7 @@ function createPlayerBody(position: Vector): colliderBody {
     cBody: collisionBodyType.player,
     sid: uuidv4(),
     health: 25,
+    score: 0,
   });
 }
 

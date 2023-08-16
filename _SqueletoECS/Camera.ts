@@ -1,5 +1,6 @@
 import { Vector } from "./Vector";
 import { Entity } from "./entity";
+//@ts-ignore
 import object from "lodash/fp";
 
 type CameraFocus = {
@@ -108,8 +109,8 @@ export class Camera {
     return new Camera(config.name, config.gameEntities, config.viewPortSystems, config.position, config.size);
   }
 
-  public update(deltaTime: number) {
-    this.vpSystems.forEach(vps => vps.update(deltaTime / 1000, 0, this.entities));
+  public update(deltaTime: number, now: number, entities: any, state: any) {
+    this.vpSystems.forEach(vps => vps.update(deltaTime / 1000, 0, this.entities, state));
     //camera position update
 
     if (this.cameraFocus.mode == "point") {
