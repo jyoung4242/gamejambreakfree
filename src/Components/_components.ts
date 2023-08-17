@@ -25,6 +25,8 @@ import { TypeComp } from "./typeComponent";
 import { Velocity } from "./velocityComp";
 import { ZindexComp } from "./zindexComp";
 import { healthComp } from "./health";
+import { borderComp } from "./border";
+import { overflowComp } from "./overflow";
 
 // The template component is demonstrated by default, you'll probably
 // want to replace it
@@ -49,6 +51,8 @@ export function LoadComponents() {
     new DebugComp(),
     new InventoryComp(),
     new damageComp(),
+    new overflowComp(),
+    new borderComp(),
     new healthComp(),
   ];
 }

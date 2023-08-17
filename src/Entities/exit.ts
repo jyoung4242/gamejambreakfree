@@ -20,6 +20,13 @@ export class exitEntity {
       components: {
         type: { data: "exit" },
         size: { data: [16, 16] },
+        border: {
+          data: {
+            radius: 0,
+            color: "transparent",
+          },
+        },
+        overflow: false,
         position: position,
         zindex: 2,
         orientation: 0,

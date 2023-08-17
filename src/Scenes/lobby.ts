@@ -31,9 +31,7 @@ export class Lobby extends Scene {
   );
   start = () => {
     setTimeout(() => {
-      console.log(this);
-      console.log("calling states.set()", this.debugData);
-      this.states?.set("test", performance.now(), this.HathoraClient, this.debugData);
+      this.states?.set("charCustom", performance.now(), this.HathoraClient);
     }, 50);
   };
   name: string = "lobby";

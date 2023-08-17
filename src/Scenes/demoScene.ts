@@ -143,7 +143,10 @@ export class Test extends Scene {
             if (user.id == this.userId) playercontrolled = true;
             else playercontrolled = false;
 
-            const newEntity = playerEntity.create(user.id, [user.position.x, user.position.y], user.color, playercontrolled);
+            const newEntity = playerEntity.create(user.nickname, [user.position.x, user.position.y], user.color, playercontrolled, {
+              radius: user.borderradius.radius,
+              color: user.color,
+            });
             if (playercontrolled) this.camera?.follow(newEntity);
             this.camera?.entities.push(newEntity);
           }
@@ -345,8 +348,8 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
 
     //players
     state.players.forEach((player: any) => {
-      console.log("first update", player.position.x, player.position.y);
-      addEntity(camera, player, userid);
+      console.log("first update", player.position.x, player.position.y, player);
+      addEntity(camera, player, userid, player.borderradius, "white");
     });
     console.log(camera.entities);
 
@@ -358,7 +361,11 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
 
     switch (entity.type) {
       case "player":
-        entIndex = state.players.findIndex((player: any) => player.id == entity.name);
+        entIndex = state.players.findIndex((player: any) => {
+          console.log(player, entity);
+
+          return player.id == entity.name || player.nickname == entity.name;
+        });
         if (entIndex >= 0) {
           entity.position = state.players[entIndex].position;
         }
@@ -403,13 +410,16 @@ function updateState(firsttime: boolean, entities: any, camera: Camera, state: a
   });
 }
 
-function addEntity(camera: Camera, player: any, id: string) {
+function addEntity(camera: Camera, player: any, id: string, radius: number, color: string) {
   let playercontrolled;
 
   if (player.id == id) playercontrolled = true;
   else playercontrolled = false;
 
-  const newEntity = playerEntity.create(player.id, [player.position.x, player.position.y], player.color, playercontrolled);
+  const newEntity = playerEntity.create(player.nickname, [player.position.x, player.position.y], player.color, playercontrolled, {
+    radius,
+    color,
+  });
   if (playercontrolled) camera?.follow(newEntity);
   camera?.entities.push(newEntity);
 }

@@ -97,6 +97,8 @@ type InternalPlayer = {
     possesKey: boolean;
     weapon: weaponType;
   };
+  nickname: string;
+  borderradius: number;
 };
 
 const encoder = new TextEncoder();
@@ -410,6 +412,8 @@ const app: Application = {
           possesKey: false,
           weapon: weaponType.none,
         },
+        borderradius: 0,
+        nickname: "",
       };
       game?.dc.insert(cbody);
       game?.players.push(newPlayer);
@@ -427,6 +431,8 @@ const app: Application = {
                 status: plr.status,
                 position: plr.colliderBody.pos,
                 color: plr.color,
+                nickname: plr.nickname,
+                borderradius: plr.borderradius,
               };
             }),
           })
@@ -509,6 +515,28 @@ const app: Application = {
           }
 
           break;
+        case "playerColor":
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          console.log(msg.msg);
+          game.players[playerIndex].color = msg.msg;
+
+          break;
+        case "playerNickName":
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          console.log(msg.msg);
+          game.players[playerIndex].nickname = msg.msg;
+          break;
+        case "playerBorder":
+          game = rooms.get(roomId);
+          if (game == undefined) return;
+          playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          console.log(msg.msg);
+          game.players[playerIndex].borderradius = parseInt(msg.msg);
+          break;
         case "weapon remove":
           game = rooms.get(roomId);
           if (game == undefined) return;
@@ -522,6 +550,7 @@ const app: Application = {
           game = rooms.get(roomId);
           if (game == undefined) return;
           playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          if (playerIndex < 0) return;
           if (game.players[playerIndex].inventory.weapon == weaponType.none) return;
 
           let currentWeapon;
@@ -598,7 +627,10 @@ const app: Application = {
           game = rooms.get(roomId);
           if (game == undefined) return;
 
-          playerIndex = game.players.findIndex((player: any) => player.id == userId);
+          playerIndex = game.players.findIndex((player: any) => {
+            return player.id == userId;
+          });
+
           if ((playerIndex as number) >= 0 && game) {
             if (msg.msg != "none") {
               game.players[playerIndex as number].direction = msg.msg;
@@ -1332,6 +1364,8 @@ setInterval(() => {
               key: player.inventory.possesKey,
               weapon: player.inventory.weapon,
             },
+            nickname: player.nickname ? player.nickname : player.id,
+            borderradius: player.borderradius,
           };
         }),
         gamestates: room.gameState,
@@ -1502,7 +1536,7 @@ function createWallBody(position: Vector): colliderBody {
 }
 
 function createPlayerBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: false }), {
     cBody: collisionBodyType.player,
     sid: uuidv4(),
     health: 25,
@@ -1511,7 +1545,7 @@ function createPlayerBody(position: Vector): colliderBody {
 }
 
 function createCageBody(position: Vector): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: false }), {
     cBody: collisionBodyType.cage,
   });
 }
@@ -1585,7 +1619,7 @@ function createWhipBody(position: Vector, velocity: Vector, engaged: boolean): c
 }
 
 function createEnemyGeneratorBody(position: Vector, coords: [number, number]): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 14, 14, { isCentered: false }), {
     cBody: collisionBodyType.generator,
     sid: uuidv4(),
     coords: coords,
@@ -1593,7 +1627,7 @@ function createEnemyGeneratorBody(position: Vector, coords: [number, number]): c
 }
 
 function createEnemyBody(position: Vector, coords: [number, number]): colliderBody {
-  return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: true }), {
+  return Object.assign(new Box({ x: position.x, y: position.y }, 15, 15, { isCentered: false }), {
     cBody: collisionBodyType.enemy,
     sid: uuidv4(),
     velocity: new Vector(0, 0),

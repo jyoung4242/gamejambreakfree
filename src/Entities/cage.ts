@@ -17,12 +17,19 @@ export class cageEntity {
         velocity: configObject.velocity,
         orientation: configObject.angle,
         angVelocity: { data: 0 },
+        border: {
+          data: {
+            radius: 0,
+            color: "transparent",
+          },
+        },
+        overflow: false,
         sprites: [
           {
             src: cage,
             size: [16, 16],
             angle: 0,
-            offset: [-8, -8], //centers on entity
+            offset: [0, 0], //centers on entity
             anchor: new Vector(8, 8),
             fit: "cover",
           },

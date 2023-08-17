@@ -15,6 +15,13 @@ export class GeneratorEntity {
         enemyGen: { data: true },
         orientation: 0,
         position: startingPosition,
+        border: {
+          data: {
+            radius: 0,
+            color: "transparent",
+          },
+        },
+        overflow: false,
         zindex: 2,
         size: { data: [16, 16] },
         sprites: [

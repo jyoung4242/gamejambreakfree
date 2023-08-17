@@ -14,6 +14,13 @@ export class keyEntity {
         position: position,
         zindex: 2,
         orientation: 0,
+        overflow: false,
+        border: {
+          data: {
+            radius: 0,
+            color: "transparent",
+          },
+        },
         sprites: [
           {
             src: key,

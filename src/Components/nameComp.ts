@@ -14,19 +14,24 @@ export class Name extends Component {
   public template = `
     <style>
       .name-component {
+       display:flex;
+       flex-direction: column;
+       justify-content: center;
+       align-items: center;
         color: white;
         position: absolute;
-        font-size: 6px;
-        font-weight: bold;
-        width: 50px;
+        width: 100%;
         height: 16px;
-        top: -16px;
-        left: -26px;
+       
         text-align: center;
         z-index: 3;
       }
     </style>
-    <div class="name-component">\${value}</div>
+    <div class="name-component">
+      <svg viewBox="0 0 60 60">
+        <text class='caption' x="50%" y="50%" text-anchor="middle">\${value}</text>
+      </svg>
+    </div>
     `;
 
   public value = "";
