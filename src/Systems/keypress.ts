@@ -2,6 +2,7 @@ import { Entity } from "../../_SqueletoECS/entity";
 import { System } from "../../_SqueletoECS/system";
 import { MultiPlayerInterface } from "../../_SqueletoECS/Multiplayer";
 import { NameComponent } from "../Components/nameComp";
+import { KeyboardComp, KeyboardComponent } from "../Components/keyboard";
 import { gamestates } from "../projecttypes";
 
 const directions = {
@@ -19,7 +20,7 @@ const keys: any = {
 
 // type definition for ensuring the entity template has the correct components
 // ComponentTypes are defined IN the components imported
-export type KeypressEntity = Entity & NameComponent;
+export type KeypressEntity = Entity & NameComponent & KeyboardComponent;
 
 export class KeypressSystem extends System {
   lastkeypressed: string = "none";
@@ -59,8 +60,9 @@ export class KeypressSystem extends System {
     // return the test to determine if the entity has the correct properties
     // return entity.position != null && entity.velocity != null; for example demostrates that only
     // entities that have position and velocity properties can use this system
+    if (entity.keyboard) console.log(entity.keyboard);
 
-    return this.userId == entity.name;
+    return entity.keyboard;
   }
 
   // update routine that is called by the gameloop engine
@@ -76,10 +78,10 @@ export class KeypressSystem extends System {
 
       if (this.held_direction[0] != this.lastkeypressed) {
         if (this.held_direction.length == 0 || this.held_direction[0] == undefined) {
-          //console.log("sending none");
+          console.log("sending none");
           this.serverConnection.sendMessage("DirectionUpdate", "none");
         } else {
-          //console.log("sending: ", this.held_direction[0]);
+          console.log("sending: ", this.held_direction[0]);
           this.serverConnection.sendMessage("DirectionUpdate", this.held_direction[0]);
         }
         this.lastkeypressed = this.held_direction[0];

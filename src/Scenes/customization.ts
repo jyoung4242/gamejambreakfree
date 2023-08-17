@@ -8,7 +8,6 @@ import { Vector } from "../../_SqueletoECS/Vector";
 import { MultiPlayerInterface, AuthenticationType } from "../../_SqueletoECS/Multiplayer";
 
 //Scene Systems
-import { LobbyUI } from "../Systems/nonECSLobbyUI";
 import { CharCustomUI } from "../Systems/charcustom";
 
 //Entities
@@ -16,7 +15,9 @@ import { CharCustomUI } from "../Systems/charcustom";
 export class CharCustom extends Scene {
   userId: string = "";
   messageHandler = (msg: any) => {
-    console.log("char custom: ", msg);
+    if (msg.type == "stateupdate") {
+      if (this.hud && msg.state) this.hud.myStateupdate(msg.state);
+    }
   };
 
   debugData: any;
@@ -29,16 +30,15 @@ export class CharCustom extends Scene {
   );
   start = () => {
     setTimeout(() => {
-      console.log(this);
-      console.log("calling states.set()", this.debugData);
-      this.states?.set("test", performance.now(), this.HathoraClient, this.debugData);
+      this.states?.set("test", performance.now(), this.HathoraClient);
     }, 50);
   };
-  name: string = "lobby";
+  name: string = "charCustom";
   entitySystems: any = [];
   sceneSystems: any = [];
   entities: any = [];
   lobbyEngine: Engine | undefined;
+  hud: any;
 
   public template = `
     <scene-layer>
@@ -51,15 +51,15 @@ export class CharCustom extends Scene {
     this.HathoraClient = this.params[0];
     this.HathoraClient?.setUpdateCallback(this.messageHandler);
     this.userId = this.HathoraClient?.userdata.id as string;
-    console.log(this.HathoraClient);
 
-    console.log("creating camera");
+    this.hud = CharCustomUI.create({ name: "CharCustom", interface: this.HathoraClient, sceneSwitch: this.start });
+
     const cameraConfig: ICameraConfig = {
       name: "camera",
       gameEntities: this.entities,
       position: new Vector(0, 0),
       size: new Vector(400, 266.67),
-      viewPortSystems: [CharCustomUI.create({ name: "CharCustom", interface: this.HathoraClient, sceneSwitch: this.start })],
+      viewPortSystems: [this.hud],
     };
 
     let camera = Camera.create(cameraConfig);
@@ -68,7 +68,6 @@ export class CharCustom extends Scene {
     //GameLoop
     console.log("starting engine");
     this.sceneSystems.push(camera);
-
     this.lobbyEngine = Engine.create({ fps: 60, started: true, callback: this.update });
   }
 

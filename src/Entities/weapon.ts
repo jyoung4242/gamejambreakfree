@@ -161,12 +161,19 @@ export class weaponEntity {
         position: myPosition,
         sid: id,
         size: { data: [16, 16] },
+        border: {
+          data: {
+            radius: 0,
+            color: "transparent",
+          },
+        },
+        overflow: false,
         sprites: [
           {
             src: myImage,
             size: [16, 16],
             angle: myAngle,
-            offset: [0, 0], //centers on entity
+            offset: [8, 8], //centers on entity
             animation: myAnimation,
             anchor: new Vector(8, 8),
             fit: "cover",

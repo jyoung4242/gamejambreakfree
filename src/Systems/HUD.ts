@@ -1,6 +1,10 @@
 import { gamestates } from "../projecttypes";
 
 export class hudUI {
+  state: any = {
+    players: [],
+    gamestates: gamestates,
+  };
   get bannerFlag() {
     if (this.state) return this.state.gamestates == gamestates.startingbanner;
     return null;
@@ -115,8 +119,12 @@ export class hudUI {
         <div class="gameHUD" \${===gameHUDFlag}>
             <div class="heroUI" \${hero<=*state.players:id}>
               <div class="firstline">
-                <div class="avatar" style="background: \${hero.color}"></div>
-                <div class="id">\${hero.id}</div>
+                <div class="avatar" style="background: \${hero.color}; border: 1px solid white; border-radius: \${hero.borderradius}px;"></div>
+                <div class="id">
+                <svg viewBox="0 0 60 60">
+                  <text class='caption' x="50%" y="50%" text-anchor="middle">\${hero.nickname}</text>
+                </svg>
+                </div>
               </div>
               
               <div class="health">
@@ -124,11 +132,11 @@ export class hudUI {
               </div>
               <div class="points">\${hero.score}</div>
               <div class="inventory">
-                  <div class='key'></div>
-                  <div class='rock'></div>
-                  <div class='whip'></div>
-                  <div class='club'></div>
-                  <div class='knife'></div>
+                  <div class='key' \${===hero.haskey}></div>
+                  <div class='rock' \${===hero.hasRock}></div>
+                  <div class='whip' \${===hero.hasWhip}></div>
+                  <div class='club' \${===hero.hasClub}></div>
+                  <div class='knife' \${===hero.hasKnife}></div>
               </div>
             </div>
         </div>
@@ -138,25 +146,61 @@ export class hudUI {
 
   startGame: Function;
 
-  private constructor(public state: any, start: Function) {
+  private constructor(start: Function) {
     this.startGame = start;
-    console.log(state);
+    //console.log(state);
   }
 
   public static create(state: any, startcallbck: Function): hudUI {
-    return new hudUI(state, startcallbck);
+    return new hudUI(startcallbck);
   }
 
-  public update(deltaTime: number, now: number, entities: [], state: any) {
-    if (state) {
-      console.log(state.players);
-      this.state = state;
-    }
-  }
+  public update(deltaTime: number, now: number, entities: [], state: any) {}
 
   stateUpdate(state: any) {
-    //console.log(state);
+    //console.log("reg update: ", state);
 
-    this.state = state;
+    if (state) {
+      this.state.gamestates = state.gamestates;
+      // console.log(state.players);
+      this.state.players = [...state.players];
+      this.state.players.forEach((st: any) => {
+        if ("haskey" in st) {
+          if (st.inventory.key) st.haskey == true;
+        } else {
+          if (st.inventory.key) Object.assign(st, { haskey: true });
+          else Object.assign(st, { haskey: false });
+        }
+
+        if ("hasWhip" in st) {
+          if (st.inventory.weapon == "whip") st.hasWhip == true;
+        } else {
+          if (st.inventory.weapon == "whip") Object.assign(st, { hasWhip: true });
+          else Object.assign(st, { hasWhip: false });
+        }
+
+        if ("hasRock" in st) {
+          if (st.inventory.weapon == "rock") st.hasRock == true;
+        } else {
+          if (st.inventory.weapon == "rock") Object.assign(st, { hasRock: true });
+          else Object.assign(st, { hasRock: false });
+        }
+
+        if ("hasKnife" in st) {
+          if (st.inventory.weapon == "knife") st.hasKnife == true;
+        } else {
+          if (st.inventory.weapon == "knife") Object.assign(st, { hasKnife: true });
+          else Object.assign(st, { hasKnife: false });
+        }
+
+        if ("hasClub" in st) {
+          if (st.inventory.weapon == "club") st.hasClub == true;
+        } else {
+          if (st.inventory.weapon == "club") Object.assign(st, { hasClub: true });
+          else Object.assign(st, { hasClub: false });
+        }
+      });
+    }
+    //console.log("hudstate", this.state);
   }
 }

@@ -23,8 +23,8 @@ export class ColorComp extends Component {
       position: relative;
       width: 16px;
       height: 16px;
-      top: -8px;
-      left: -8px;
+      top: 0px;
+      left: 0px;
     }
   </style>
   <div class="color-component" style="background-color: \${value};"></div>

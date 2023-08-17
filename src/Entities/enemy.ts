@@ -142,12 +142,19 @@ export class enemyEntity {
         orientation: 0,
         velocity: new Vector(0, 0),
         size: { data: new Vector(16, 16) },
+        border: {
+          data: {
+            radius: 0,
+            color: "transparent",
+          },
+        },
+        overflow: false,
         sprites: [
           {
             src: baddie,
             size: [32, 32],
             angle: 0,
-            offset: [-16, -16],
+            offset: [0, 0],
             animation: enemyAnimation,
             anchor: new Vector(0, 0),
             fit: "auto",
