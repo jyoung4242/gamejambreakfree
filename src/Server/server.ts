@@ -42,6 +42,7 @@ type direction = "right" | "up" | "left" | "down" | "none";
 
 type InternalState = {
   dc: System;
+  soloGame: boolean;
   scoreTik: number;
   map: Array<Array<number>> | undefined;
   startingCoords: [number, number];
@@ -307,6 +308,7 @@ const app: Application = {
         tempDC.insert(g2 as colliderBody);
 
         let newRoomState: InternalState = {
+          soloGame: true,
           scoreTik: 0,
           dc: tempDC,
           exitCoords: [...mapdata.exit],
@@ -368,6 +370,10 @@ const app: Application = {
       let playerNum;
       if (game?.players) {
         playerNum = game.players.length + 1;
+      }
+
+      if ((playerNum as number) > 1) {
+        if (game) game.soloGame = false;
       }
 
       let startingVector: Vector;
@@ -503,6 +509,8 @@ const app: Application = {
           //confirm room
           game = rooms.get(roomId);
           if (game == undefined) return;
+
+          //mark if game is a solo game or a team game
 
           if (game.gameState == gamestates.prestart) {
             game.gameState = gamestates.startingbanner;
